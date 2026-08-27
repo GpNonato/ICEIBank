@@ -23,3 +23,17 @@ Não. O saldo caiu de 20 para 10 mesmo com a falha. Isso deixa o sistema inconsi
 ### 3. Duas formas de corrigir o problema no Sprint 4
 
 Uma opção é usar 2PC, confirmando a operação nas duas agências antes de concluí-la. Outra opção é usar Saga, fazendo uma operação de compensação para devolver o valor quando o crédito falhar.
+
+## Parte E — Linha do tempo unificada
+
+### Observação da linha do tempo
+
+As três agências registraram `CRIAR_CONTA` com timestamp Lamport 1. Esses eventos são concorrentes, pois aconteceram de forma independente. Também houve dois eventos com timestamp 2, e a ordem mostrada não foi a mesma da hora de parede.
+
+### 1. Timestamps diferentes garantem relação causal?
+
+Não. Se um evento causou outro, seu timestamp será menor. Mas apenas ver timestamps diferentes não prova que um evento influenciou o outro.
+
+### 2. O relógio de Lamport distingue concorrência com certeza?
+
+Não. Ele ordena os eventos, mas não identifica sozinho se eles são concorrentes. O relógio vetorial resolve essa limitação ao guardar o progresso de cada processo.
