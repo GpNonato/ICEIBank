@@ -1,6 +1,10 @@
-﻿# Node
-node_modules/
+# Execução
 agencia/data/*.jsonl
+
+# Python
+agencia/.venv/
+__pycache__/
+*.py[cod]
 
 # Sistema
 Thumbs.db
