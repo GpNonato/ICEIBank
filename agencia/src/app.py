@@ -25,7 +25,11 @@ app.include_router(router)
 
 @app.exception_handler(HTTPException)
 async def tratar_erro_http(_request: Request, erro: HTTPException):
-    return JSONResponse(status_code=erro.status_code, content={"erro": erro.detail})
+    return JSONResponse(
+        status_code=erro.status_code,
+        content={"erro": erro.detail},
+        headers=erro.headers,
+    )
 
 
 if __name__ == "__main__":

@@ -37,3 +37,23 @@ Não. Se um evento causou outro, seu timestamp será menor. Mas apenas ver times
 ### 2. O relógio de Lamport distingue concorrência com certeza?
 
 Não. Ele ordena os eventos, mas não identifica sozinho se eles são concorrentes. O relógio vetorial resolve essa limitação ao guardar o progresso de cada processo.
+
+## Parte F — Autenticação JWT
+
+### Decisões de implementação
+
+O login usa usuário e senha, pois é uma forma simples de autenticação para este sprint, que ainda não possui banco de dados de usuários. As credenciais podem ser alteradas por variáveis de ambiente. O token expira em 15 minutos.
+
+As chamadas entre agências usam um JWT próprio com o tipo `agencia`. Assim, o crédito remoto continua protegido sem usar o token da pessoa que iniciou a transferência.
+
+### 1. Diferença entre autenticação e autorização
+
+Autenticação confirma quem está acessando. Autorização define o que essa pessoa pode fazer. O sistema distingue tokens de usuário e de agência, mas ainda não verifica o dono da conta. Portanto, um usuário autenticado consegue operar qualquer conta.
+
+### 2. Por que o JWT não exige consulta ao banco de dados?
+
+Porque o servidor verifica a assinatura usando a chave secreta. Isso facilita a escalabilidade, pois diferentes instâncias podem validar o token sem compartilhar sessões em memória.
+
+### 3. O que acontece se a chave secreta vazar?
+
+Quem possuir a chave poderá criar tokens válidos e se passar por usuários ou agências. Nesse caso, a chave precisa ser trocada e os tokens antigos devem deixar de ser aceitos.

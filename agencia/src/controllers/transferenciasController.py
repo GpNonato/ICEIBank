@@ -3,6 +3,7 @@ from fastapi import HTTPException, Request
 
 from ..config import agencia_responsavel, obter_agencia
 from ..models import CreditoRemotoEntrada, TransferenciaEntrada
+from ..services.authService import gerar_token_agencia
 
 
 async def transferir(dados: TransferenciaEntrada, request: Request):
@@ -31,10 +32,12 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
 
     timestamp_envio = estado.relogio.ao_enviar()
     destino = obter_agencia(agencia_destino)
+    token_agencia = gerar_token_agencia(estado.id_agencia)
     try:
         async with httpx.AsyncClient(trust_env=False) as cliente:
             resposta = await cliente.post(
                 f"{destino['url']}/contas/{dados.idDestino}/creditar-remoto",
+                headers={"Authorization": f"Bearer {token_agencia}"},
                 json={
                     "valor": dados.valor,
                     "timestampLamport": timestamp_envio,

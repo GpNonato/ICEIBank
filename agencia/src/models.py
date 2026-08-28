@@ -21,3 +21,8 @@ class CreditoRemotoEntrada(BaseModel):
     valor: float
     timestampLamport: int
     origemAgencia: int
+
+
+class LoginEntrada(BaseModel):
+    usuario: str
+    senha: str
