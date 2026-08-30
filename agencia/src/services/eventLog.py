@@ -25,3 +25,25 @@ class RegistroEventos:
                 arquivo.write(json.dumps(evento, ensure_ascii=False) + "\n")
         print(f"[Lamport {timestamp_lamport}] {tipo} {detalhes}", flush=True)
         return evento
+
+    def listar_por_conta(self, id_conta: int) -> list[dict]:
+        if not self.caminho_arquivo.exists():
+            return []
+        eventos = []
+        with self._lock:
+            linhas = self.caminho_arquivo.read_text(encoding="utf-8").splitlines()
+        for linha in linhas:
+            try:
+                evento = json.loads(linha)
+            except json.JSONDecodeError:
+                continue
+            detalhes = evento.get("detalhes", {})
+            ids = {
+                detalhes.get("id"),
+                detalhes.get("idOrigem"),
+                detalhes.get("idDestino"),
+                detalhes.get("idConta"),
+            }
+            if id_conta in ids:
+                eventos.append(evento)
+        return eventos

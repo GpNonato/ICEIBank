@@ -20,3 +20,7 @@ class RelogioLamport:
         with self._lock:
             self.contador = max(self.contador, timestamp_recebido) + 1
             return self.contador
+
+    def valor_atual(self) -> int:
+        with self._lock:
+            return self.contador

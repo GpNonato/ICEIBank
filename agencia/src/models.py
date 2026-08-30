@@ -15,12 +15,14 @@ class TransferenciaEntrada(BaseModel):
     idOrigem: int
     idDestino: int
     valor: float
+    idOperacao: str | None = None
 
 
 class CreditoRemotoEntrada(BaseModel):
     valor: float
     timestampLamport: int
     origemAgencia: int
+    idOperacao: str
 
 
 class LoginEntrada(BaseModel):

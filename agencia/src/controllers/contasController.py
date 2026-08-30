@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Request
 
-from ..config import agencia_responsavel
+from ..config import LIMITE_SAQUE, agencia_responsavel, formatar_reais
 from ..models import CriarContaEntrada, ValorEntrada
 
 
@@ -48,6 +48,8 @@ async def sacar(id_conta: int, dados: ValorEntrada, request: Request):
     conta = estado.contas.get(id_conta)
     if conta is None:
         raise HTTPException(404, "Conta não encontrada nesta agência.")
+    if dados.valor > LIMITE_SAQUE:
+        raise HTTPException(400, f"Limite de saque por operação: R$ {formatar_reais(LIMITE_SAQUE)}.")
     if conta["saldo"] < dados.valor:
         raise HTTPException(400, "Saldo insuficiente.")
     timestamp = estado.relogio.evento_local()
