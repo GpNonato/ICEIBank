@@ -146,13 +146,30 @@ async def processar_credito_remoto(estado, mensagem: dict) -> None:
             timestamp,
             {**detalhes, "motivo": "conta não encontrada"},
         )
-        await publicar_confirmacao(estado, mensagem, "falhou", "conta não encontrada")
-        return
+        # A mensagem volta para a fila; depois de esgotar as tentativas, o RabbitMQ
+        # a encaminha para a fila de mensagens mortas (ver descartar_mensagem).
+        raise mensageria.ErroProcessamento("conta não encontrada")
 
     conta["saldo"] += mensagem["valor"]
     estado.creditos_processados[id_operacao] = timestamp
     estado.registro.registrar("TRANSFERENCIA_CREDITO_REMOTO", timestamp, detalhes)
     await publicar_confirmacao(estado, mensagem, "creditado")
+
+
+async def descartar_mensagem(estado, routing_key: str, mensagem: dict | None, erro: Exception) -> None:
+    estado.registro.registrar(
+        "MENSAGEM_ENVIADA_DLQ",
+        estado.relogio.evento_local(),
+        {
+            "routingKey": routing_key,
+            "fila": mensageria.FILA_MORTAS,
+            "idConta": mensagem.get("idConta") if mensagem else None,
+            "idOperacao": mensagem.get("idOperacao") if mensagem else None,
+            "motivo": str(erro),
+        },
+    )
+    if mensagem and routing_key.endswith(".creditar"):
+        await publicar_confirmacao(estado, mensagem, "falhou", str(erro))
 
 
 async def publicar_confirmacao(estado, mensagem: dict, status: str, motivo: str | None = None) -> None:

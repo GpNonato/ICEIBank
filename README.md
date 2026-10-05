@@ -85,11 +85,12 @@ saldo <conta>                               mostra titular, agência e saldo
 depositar <conta> <valor>                   credita um valor na conta
 sacar <conta> <valor>                       debita um valor da conta
 transferir <origem> <destino> <valor> [id]  transferência local ou entre agências
+situacao <id-operacao>                      mostra se o crédito foi confirmado
 criar <conta> <nome> <saldo>                abre uma conta na agência conectada
 historico <conta>                           lista os eventos da conta
-limites                                     mostra os limites por operação
+limites                                     mostra os limites e o alerta de saldo
 extrato <nome>                              consolida contas nas três agências
-status [agencia]                            mostra relógio e quantidade de contas
+status [agencia]                            mostra relógio vetorial e quantidade de contas
 swagger [agencia]                           abre a documentação da agência
 sair                                        encerra a sessão e remove o token
 ```
@@ -135,6 +136,26 @@ com `situacao <id-operacao>`:
 - `aguardando confirmação`: o crédito foi publicado e ainda não houve resposta;
 - `creditada no destino`: o destino aplicou o crédito;
 - `crédito não aplicado no destino`: o destino não conseguiu aplicar o crédito.
+
+### Fila de mensagens não processadas (dead-letter)
+
+As filas das agências são declaradas com `x-dead-letter-exchange: iceibank.mortas`.
+Quando um crédito falha (por exemplo, conta não encontrada), a mensagem volta para a
+fila e é tentada de novo, até 3 vezes, com 1 segundo de intervalo. Na terceira falha,
+a agência a rejeita sem requeue e o RabbitMQ a encaminha para `fila-mensagens-mortas`,
+que guarda a mensagem original e o cabeçalho `x-death`. A agência de destino registra
+`MENSAGEM_ENVIADA_DLQ` e envia à origem uma confirmação com `status: falhou`.
+
+```powershell
+.\.venv\Scripts\python.exe inspecionar-filas.py --mortas
+```
+
+O RabbitMQ não permite alterar os argumentos de uma fila existente. Se as filas das
+agências foram criadas por uma versão anterior, apague-as (vazias) antes de iniciar:
+
+```powershell
+.\.venv\Scripts\python.exe inspecionar-filas.py --recriar
+```
 
 ## Funcionalidades adicionais do Sprint 1
 

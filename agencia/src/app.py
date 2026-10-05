@@ -10,7 +10,11 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import AGENCIAS, NUMERO_AGENCIAS, obter_agencia
-from .controllers.transferenciasController import processar_confirmacao, processar_credito_remoto
+from .controllers.transferenciasController import (
+    descartar_mensagem,
+    processar_confirmacao,
+    processar_credito_remoto,
+)
 from .routes import router
 from .services import authService, mensageria
 from .services.eventLog import RegistroEventos
@@ -39,6 +43,7 @@ async def ciclo_de_vida(app: FastAPI):
             "creditar": lambda mensagem: processar_credito_remoto(app.state, mensagem),
             "confirmacao": lambda mensagem: processar_confirmacao(app.state, mensagem),
         },
+        lambda chave, mensagem, erro: descartar_mensagem(app.state, chave, mensagem, erro),
     )
     print(f"[Agência {id_agencia}] consumindo fila-agencia-{id_agencia}", flush=True)
     yield
