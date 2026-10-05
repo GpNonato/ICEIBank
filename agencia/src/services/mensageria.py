@@ -47,19 +47,32 @@ async def publicar(routing_key: str, mensagem: dict) -> None:
     )
 
 
+async def consumir(
+    nome_fila: str,
+    chaves: list[str],
+    ao_receber: Callable[[str, dict], Awaitable[None]],
+) -> None:
+    exchange = await obter_exchange()
+    fila = await _canal.declare_queue(nome_fila, durable=True)
+    for chave in chaves:
+        await fila.bind(exchange, chave)
+
+    async def processar(mensagem: aio_pika.abc.AbstractIncomingMessage) -> None:
+        async with mensagem.process():
+            await ao_receber(mensagem.routing_key, json.loads(mensagem.body))
+
+    await fila.consume(processar)
+
+
 async def assinar(
     id_agencia: int,
     ao_receber_mensagem: Callable[[dict], Awaitable[None]],
 ) -> None:
-    exchange = await obter_exchange()
-    fila = await _canal.declare_queue(f"fila-agencia-{id_agencia}", durable=True)
-    await fila.bind(exchange, f"agencia.{id_agencia}.creditar")
-
-    async def consumir(mensagem: aio_pika.abc.AbstractIncomingMessage) -> None:
-        async with mensagem.process():
-            await ao_receber_mensagem(json.loads(mensagem.body))
-
-    await fila.consume(consumir)
+    await consumir(
+        f"fila-agencia-{id_agencia}",
+        [f"agencia.{id_agencia}.creditar"],
+        lambda _chave, conteudo: ao_receber_mensagem(conteudo),
+    )
 
 
 async def fechar() -> None:

@@ -1,5 +1,6 @@
 # ExecuÃ§Ã£o
 agencia/data/*.jsonl
+agencia/data/auditoria/
 
 # Configuração local (contém a URL do RabbitMQ com usuário e senha)
 agencia/.env

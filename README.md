@@ -101,7 +101,20 @@ histórico e mostra o endpoint chamado à direita de cada comando. O token fica 
 Como o comando `agencia` chama as outras portas, cada agência libera via CORS as
 origens das demais (`localhost` e `127.0.0.1` nas portas 4042-4044).
 
-## Funcionalidades adicionais
+## Funcionalidades adicionais do Sprint 2
+
+### Fila de auditoria
+
+Um consumidor separado assina a exchange com a routing key `#` e recebe uma cópia de
+todas as mensagens publicadas por todas as agências. Cada mensagem é gravada em
+`agencia/data/auditoria/auditoria-central.jsonl`. A fila `fila-auditoria` é durável:
+se o auditor estiver parado, as mensagens ficam retidas até ele voltar.
+
+```powershell
+.\.venv\Scripts\python.exe -m src.auditoria
+```
+
+## Funcionalidades adicionais do Sprint 1
 
 O sistema possui histórico por conta, limite de R$ 1.000,00 por saque e transferência, extrato consolidado entre as três agências, idempotência de transferências e rota de status. Os limites podem ser alterados pelas variáveis `LIMITE_SAQUE` e `LIMITE_TRANSFERENCIA`.
 

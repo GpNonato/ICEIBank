@@ -6,7 +6,7 @@ from aiormq.exceptions import ChannelNotFoundEntity
 from src.config import NUMERO_AGENCIAS, RABBITMQ_URL
 
 
-FILAS = [f"fila-agencia-{id_agencia}" for id_agencia in range(NUMERO_AGENCIAS)]
+FILAS = [f"fila-agencia-{id_agencia}" for id_agencia in range(NUMERO_AGENCIAS)] + ["fila-auditoria"]
 
 
 async def main() -> None:
