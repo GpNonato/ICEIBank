@@ -114,6 +114,15 @@ se o auditor estiver parado, as mensagens ficam retidas até ele voltar.
 .\.venv\Scripts\python.exe -m src.auditoria
 ```
 
+### Notificação de saldo baixo
+
+Depois de um saque ou de uma transferência, se o saldo da conta ficar abaixo de
+R$ 50,00, a agência publica um alerta na routing key
+`agencia.<id>.alerta.saldo-baixo`. Esse tópico é separado do tópico de crédito, então
+não chega às filas das agências; a fila de auditoria recebe o alerta e o destaca com
+`[ALERTA]`. O limite pode ser alterado pela variável `LIMITE_SALDO_BAIXO` e aparece no
+comando `limites` do terminal web.
+
 ## Funcionalidades adicionais do Sprint 1
 
 O sistema possui histórico por conta, limite de R$ 1.000,00 por saque e transferência, extrato consolidado entre as três agências, idempotência de transferências e rota de status. Os limites podem ser alterados pelas variáveis `LIMITE_SAQUE` e `LIMITE_TRANSFERENCIA`.

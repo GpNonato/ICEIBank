@@ -17,7 +17,7 @@
     ['transferir <origem> <destino> <valor> [id-operacao]', 'faz transferência local ou entre agências'],
     ['criar <conta> <nome> <saldo>', 'abre uma conta na agência conectada'],
     ['historico <conta>', 'lista os eventos registrados para uma conta'],
-    ['limites', 'mostra os limites de saque e transferência'],
+    ['limites', 'mostra os limites de saque, transferência e saldo baixo'],
     ['extrato <nome>', 'soma as contas de um titular nas três agências'],
     ['status [agencia]', 'mostra o estado e o relógio de uma agência'],
     ['swagger [agencia]', 'abre a documentação da agência'],
@@ -474,6 +474,7 @@
         var dadosLimites = await api('GET', '/limites');
         out('limite de saque: ' + money(dadosLimites.limiteSaque), DIM);
         out('limite de transferência: ' + money(dadosLimites.limiteTransferencia), DIM);
+        out('alerta de saldo baixo abaixo de: ' + money(dadosLimites.limiteSaldoBaixo), DIM);
       });
     }
 

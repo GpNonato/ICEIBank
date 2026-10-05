@@ -18,7 +18,8 @@ async def registrar(routing_key: str, mensagem: dict) -> None:
     }
     with ARQUIVO.open("a", encoding="utf-8") as arquivo:
         arquivo.write(json.dumps(registro, ensure_ascii=False) + "\n")
-    print(f"[Auditoria] {routing_key} {json.dumps(mensagem, ensure_ascii=False)}", flush=True)
+    marcador = "[Auditoria][ALERTA]" if ".alerta." in routing_key else "[Auditoria]"
+    print(f"{marcador} {routing_key} {json.dumps(mensagem, ensure_ascii=False)}", flush=True)
 
 
 async def main() -> None:

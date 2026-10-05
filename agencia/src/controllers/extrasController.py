@@ -1,7 +1,7 @@
 import httpx
 from fastapi import HTTPException, Query, Request
 
-from ..config import AGENCIAS, LIMITE_SAQUE, LIMITE_TRANSFERENCIA, agencia_responsavel
+from ..config import AGENCIAS, LIMITE_SALDO_BAIXO, LIMITE_SAQUE, LIMITE_TRANSFERENCIA, agencia_responsavel
 from ..services.authService import gerar_token_agencia
 
 
@@ -22,6 +22,7 @@ async def consultar_limites():
     return {
         "limiteSaque": LIMITE_SAQUE,
         "limiteTransferencia": LIMITE_TRANSFERENCIA,
+        "limiteSaldoBaixo": LIMITE_SALDO_BAIXO,
     }
 
 

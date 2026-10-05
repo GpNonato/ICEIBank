@@ -5,6 +5,7 @@ from fastapi import HTTPException, Request
 from ..config import LIMITE_TRANSFERENCIA, agencia_responsavel, formatar_reais
 from ..models import TransferenciaEntrada
 from ..services import mensageria
+from ..services.alertas import verificar_saldo_baixo
 
 
 def resultado_anterior(estado, id_operacao: str):
@@ -57,6 +58,7 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
         timestamp_credito = estado.relogio.evento_local()
         conta_destino["saldo"] += dados.valor
         estado.registro.registrar("TRANSFERENCIA_CREDITO", timestamp_credito, detalhes)
+        await verificar_saldo_baixo(estado, conta_origem)
         return concluir(estado, id_operacao, "Transferência concluída (mesma agência).")
 
     # Em vez de chamar a outra agência por REST (Sprint 1), a agência publica um
@@ -89,6 +91,7 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
         timestamp_envio,
         {**detalhes, "routingKey": f"agencia.{agencia_destino}.creditar"},
     )
+    await verificar_saldo_baixo(estado, conta_origem)
     return concluir(
         estado,
         id_operacao,
