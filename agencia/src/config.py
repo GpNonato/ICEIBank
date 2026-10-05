@@ -1,11 +1,17 @@
 import os
+from pathlib import Path
 
+from dotenv import load_dotenv
+
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 OFFSET = 42
 NUMERO_AGENCIAS = 3
 PORTA_BASE = 4000 + OFFSET
 LIMITE_SAQUE = float(os.getenv("LIMITE_SAQUE", "1000"))
 LIMITE_TRANSFERENCIA = float(os.getenv("LIMITE_TRANSFERENCIA", "1000"))
+RABBITMQ_URL = os.getenv("RABBITMQ_URL")
 
 AGENCIAS = [
     {"id": 0, "url": f"http://localhost:{PORTA_BASE}"},

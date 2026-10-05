@@ -1,11 +1,10 @@
 from uuid import uuid4
 
-import httpx
 from fastapi import HTTPException, Request
 
-from ..config import LIMITE_TRANSFERENCIA, agencia_responsavel, formatar_reais, obter_agencia
-from ..models import CreditoRemotoEntrada, TransferenciaEntrada
-from ..services.authService import gerar_token_agencia
+from ..config import LIMITE_TRANSFERENCIA, agencia_responsavel, formatar_reais
+from ..models import TransferenciaEntrada
+from ..services import mensageria
 
 
 def resultado_anterior(estado, id_operacao: str):
@@ -14,8 +13,6 @@ def resultado_anterior(estado, id_operacao: str):
         return None
     if registro["status"] == "concluida":
         return {**registro["resposta"], "repetida": True}
-    if registro["status"] == "falhou":
-        raise HTTPException(502, registro["mensagem"])
     raise HTTPException(409, "Transferência com este identificador está em processamento.")
 
 
@@ -60,86 +57,76 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
         timestamp_credito = estado.relogio.evento_local()
         conta_destino["saldo"] += dados.valor
         estado.registro.registrar("TRANSFERENCIA_CREDITO", timestamp_credito, detalhes)
-        resposta = {
-            "mensagem": "Transferência concluída (mesma agência).",
-            "idOperacao": id_operacao,
-            "repetida": False,
-        }
-        estado.transferencias_processadas[id_operacao] = {
-            "status": "concluida",
-            "resposta": resposta,
-        }
-        return resposta
+        return concluir(estado, id_operacao, "Transferência concluída (mesma agência).")
 
+    # Em vez de chamar a outra agência por REST (Sprint 1), a agência publica um
+    # evento na exchange. A agência de destino consome quando estiver disponível;
+    # se estiver fora do ar, a mensagem fica retida na fila durável.
     timestamp_envio = estado.relogio.ao_enviar()
-    destino = obter_agencia(agencia_destino)
-    token_agencia = gerar_token_agencia(estado.id_agencia)
     try:
-        async with httpx.AsyncClient(trust_env=False) as cliente:
-            resposta_remota = await cliente.post(
-                f"{destino['url']}/contas/{dados.idDestino}/creditar-remoto",
-                headers={"Authorization": f"Bearer {token_agencia}"},
-                json={
-                    "valor": dados.valor,
-                    "timestampVetorial": timestamp_envio,
-                    "origemAgencia": estado.id_agencia,
-                    "idOperacao": id_operacao,
-                },
-            )
-            resposta_remota.raise_for_status()
-        resposta = {
-            "mensagem": "Transferência concluída (entre agências).",
-            "idOperacao": id_operacao,
-            "repetida": False,
-        }
-        estado.transferencias_processadas[id_operacao] = {
-            "status": "concluida",
-            "resposta": resposta,
-        }
-        return resposta
-    except httpx.HTTPError as erro:
-        mensagem = (
-            "Falha ao contatar agência de destino. Débito já aplicado - "
-            "inconsistência conhecida (ver Sprint 4)."
+        await mensageria.publicar(
+            f"agencia.{agencia_destino}.creditar",
+            {
+                "idConta": dados.idDestino,
+                "valor": dados.valor,
+                "vetorEnvio": timestamp_envio,
+                "origemAgencia": estado.id_agencia,
+                "idOperacao": id_operacao,
+            },
         )
-        estado.transferencias_processadas[id_operacao] = {
-            "status": "falhou",
-            "mensagem": mensagem,
-        }
+    except Exception as erro:
+        conta_origem["saldo"] += dados.valor
+        estado.transferencias_processadas.pop(id_operacao, None)
         estado.registro.registrar(
             "TRANSFERENCIA_FALHOU",
             estado.relogio.evento_local(),
-            {**detalhes, "erro": str(erro)},
+            {**detalhes, "erro": "falha ao publicar no RabbitMQ; débito estornado"},
         )
-        raise HTTPException(502, mensagem) from erro
+        raise HTTPException(503, "Não foi possível publicar a transferência. Débito estornado.") from erro
 
-
-async def creditar_remoto(id_conta: int, dados: CreditoRemotoEntrada, request: Request):
-    estado = request.app.state
-    timestamp = estado.relogio.ao_receber(dados.timestampVetorial)
-    anterior = estado.creditos_processados.get(dados.idOperacao)
-    if anterior is not None:
-        return {**anterior, "repetida": True}
-
-    conta = estado.contas.get(id_conta)
-    if conta is None:
-        raise HTTPException(404, "Conta não encontrada nesta agência.")
-    conta["saldo"] += dados.valor
     estado.registro.registrar(
-        "TRANSFERENCIA_CREDITO_REMOTO",
-        timestamp,
-        {
-            "idConta": id_conta,
-            "valor": dados.valor,
-            "origemAgencia": dados.origemAgencia,
-            "idOperacao": dados.idOperacao,
-        },
+        "TRANSFERENCIA_PUBLICADA",
+        timestamp_envio,
+        {**detalhes, "routingKey": f"agencia.{agencia_destino}.creditar"},
     )
-    resposta = {
-        "mensagem": "Crédito remoto aplicado.",
-        "saldoAtual": conta["saldo"],
-        "idOperacao": dados.idOperacao,
-        "repetida": False,
+    return concluir(
+        estado,
+        id_operacao,
+        "Transferência publicada para a agência de destino (entrega assíncrona).",
+    )
+
+
+def concluir(estado, id_operacao: str, mensagem: str) -> dict:
+    resposta = {"mensagem": mensagem, "idOperacao": id_operacao, "repetida": False}
+    estado.transferencias_processadas[id_operacao] = {
+        "status": "concluida",
+        "resposta": resposta,
     }
-    estado.creditos_processados[dados.idOperacao] = resposta
     return resposta
+
+
+async def processar_credito_remoto(estado, mensagem: dict) -> None:
+    timestamp = estado.relogio.ao_receber(mensagem["vetorEnvio"])
+    id_operacao = mensagem["idOperacao"]
+    detalhes = {
+        "idConta": mensagem["idConta"],
+        "valor": mensagem["valor"],
+        "origemAgencia": mensagem["origemAgencia"],
+        "idOperacao": id_operacao,
+    }
+    if id_operacao in estado.creditos_processados:
+        estado.registro.registrar("CREDITO_REMOTO_REPETIDO", timestamp, detalhes)
+        return
+
+    conta = estado.contas.get(mensagem["idConta"])
+    if conta is None:
+        estado.registro.registrar(
+            "CREDITO_REMOTO_FALHOU",
+            timestamp,
+            {**detalhes, "motivo": "conta não encontrada"},
+        )
+        return
+
+    conta["saldo"] += mensagem["valor"]
+    estado.creditos_processados[id_operacao] = timestamp
+    estado.registro.registrar("TRANSFERENCIA_CREDITO_REMOTO", timestamp, detalhes)

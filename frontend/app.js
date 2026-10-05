@@ -406,11 +406,13 @@
           }
           throw erro;
         }
-        var tipoTransferencia = agO === agD ? 'local' : 'entre agências · agência ' + agD;
+        var situacao = agO === agD
+          ? 'concluída · local'
+          : 'publicada · entre agências · crédito assíncrono na agência ' + agD;
         if (resultadoTransferencia.repetida) {
           out('transferência repetida reconhecida · nenhum valor aplicado novamente', DIM);
         } else {
-          out('transferência de ' + money(v) + ' concluída · ' + tipoTransferencia +
+          out('transferência de ' + money(v) + ' ' + situacao +
               ' · conta ' + origem + ' → conta ' + destino, DIM);
         }
         out('identificador: ' + resultadoTransferencia.idOperacao, DIM);

@@ -1,6 +1,8 @@
 # ICEIBank
 
-API REST distribuída desenvolvida em Python com FastAPI.
+API REST distribuída desenvolvida em Python com FastAPI. A partir do Sprint 2, as
+transferências entre agências são entregues por mensageria (RabbitMQ, padrão
+Publish/Subscribe) e os eventos são ordenados com relógio vetorial.
 
 ## Instalar as dependências
 
@@ -9,6 +11,33 @@ Na pasta `agencia`:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+## Configurar o RabbitMQ
+
+As agências se conectam ao RabbitMQ pela variável `RABBITMQ_URL`. Copie
+`agencia/.env.example` para `agencia/.env` e informe a AMQP URL da sua instância
+CloudAMQP. O arquivo `.env` é carregado automaticamente e fica fora do Git, pois
+contém usuário e senha:
+
+```text
+RABBITMQ_URL=amqps://usuario:senha@host.cloudamqp.com/vhost
+```
+
+Também é possível definir a variável no terminal (`$env:RABBITMQ_URL="..."`) ou usar
+um RabbitMQ local (`amqp://localhost`).
+
+Topologia criada pelas agências:
+
+- exchange `iceibank.eventos` do tipo `topic`, durável;
+- uma fila durável por agência (`fila-agencia-0`, `fila-agencia-1`, `fila-agencia-2`),
+  ligada pela routing key `agencia.<id>.creditar`;
+- mensagens publicadas como persistentes.
+
+Para ver quantas mensagens estão retidas em cada fila, sem abrir o painel do CloudAMQP:
+
+```powershell
+.\.venv\Scripts\python.exe inspecionar-filas.py
 ```
 
 ## Executar as agências
@@ -21,6 +50,11 @@ $env:AGENCIA_ID=0
 ```
 
 Use os IDs `0`, `1` e `2`. Com o offset configurado, as agências usam as portas 4042, 4043 e 4044.
+
+Uma transferência entre agências debita a origem e publica o crédito na exchange. A
+resposta HTTP 200 significa que a mensagem foi publicada; o crédito é aplicado quando a
+agência de destino consome a fila, mesmo que ela esteja fora do ar no momento da
+publicação.
 
 ## Terminal web
 

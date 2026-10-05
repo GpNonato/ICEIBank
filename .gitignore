@@ -1,6 +1,9 @@
 # ExecuÃ§Ã£o
 agencia/data/*.jsonl
 
+# Configuração local (contém a URL do RabbitMQ com usuário e senha)
+agencia/.env
+
 # Python
 agencia/.venv/
 __pycache__/

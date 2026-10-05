@@ -18,13 +18,6 @@ class TransferenciaEntrada(BaseModel):
     idOperacao: str | None = None
 
 
-class CreditoRemotoEntrada(BaseModel):
-    valor: float
-    timestampVetorial: list[int]
-    origemAgencia: int
-    idOperacao: str
-
-
 class LoginEntrada(BaseModel):
     usuario: str
     senha: str

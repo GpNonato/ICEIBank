@@ -33,12 +33,6 @@ router.add_api_route(
     methods=["POST"], dependencies=protecao_usuario,
 )
 router.add_api_route(
-    "/contas/{id_conta}/creditar-remoto",
-    transferenciasController.creditar_remoto,
-    methods=["POST"],
-    dependencies=protecao_agencia,
-)
-router.add_api_route(
     "/contas/{id_conta}/historico",
     extrasController.historico_conta,
     methods=["GET"],

@@ -1,5 +1,6 @@
 import json
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
@@ -9,8 +10,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import AGENCIAS, NUMERO_AGENCIAS, obter_agencia
+from .controllers.transferenciasController import processar_credito_remoto
 from .routes import router
-from .services import authService
+from .services import authService, mensageria
 from .services.eventLog import RegistroEventos
 from .services.vectorClock import RelogioVetorial
 
@@ -20,8 +22,29 @@ agencia_config = obter_agencia(id_agencia)
 if agencia_config is None:
     raise RuntimeError(f"Agência {id_agencia} não configurada em config.py")
 
+
+class RespostaJSON(JSONResponse):
+    # Declara o charset para clientes como o Invoke-RestMethod do PowerShell 5.1,
+    # que sem ele decodificam a resposta como ISO-8859-1 e quebram os acentos.
+    media_type = "application/json; charset=utf-8"
+
+
+@asynccontextmanager
+async def ciclo_de_vida(app: FastAPI):
+    # Consumidor: processa créditos vindos de outras agências via RabbitMQ.
+    await mensageria.assinar(
+        id_agencia,
+        lambda mensagem: processar_credito_remoto(app.state, mensagem),
+    )
+    print(f"[Agência {id_agencia}] consumindo fila-agencia-{id_agencia}", flush=True)
+    yield
+    await mensageria.fechar()
+
+
 app = FastAPI(
     title=f"ICEIBank - Agência {id_agencia}",
+    lifespan=ciclo_de_vida,
+    default_response_class=RespostaJSON,
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
@@ -59,7 +82,7 @@ def esquema_openapi() -> dict:
     dependencies=[Depends(authService.validar_token_usuario)],
 )
 async def obter_openapi():
-    return JSONResponse(esquema_openapi())
+    return RespostaJSON(esquema_openapi())
 
 
 @app.get("/docs", include_in_schema=False, response_class=HTMLResponse)
@@ -99,7 +122,7 @@ SwaggerUIBundle({{
 
 @app.exception_handler(HTTPException)
 async def tratar_erro_http(_request: Request, erro: HTTPException):
-    return JSONResponse(
+    return RespostaJSON(
         status_code=erro.status_code,
         content={"erro": erro.detail},
         headers=erro.headers,
