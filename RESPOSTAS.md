@@ -109,3 +109,78 @@ O comando `swagger <agencia>` abre a documentação da agência escolhida em uma
 ## Declaração de uso de IA
 
 Foi utilizada IA para a criação do frontend e revisão das respostas.
+
+
+# Respostas — Sprint 2: ICEIBank
+
+## Parte B — Relógio vetorial
+
+### Decisões de implementação
+
+O relógio vetorial guarda uma posição para cada agência e segue as três regras do roteiro. O registro de eventos passou a gravar o vetor completo no lugar do valor de Lamport.
+
+### 1. O que acontece com o tamanho do vetor com 10 agências?
+
+Cada mensagem passaria a levar 10 números, pois o vetor tem uma posição por agência. Com 10 agências isso não é um problema. Em sistemas com milhares de processos, o vetor fica grande e todos precisam conhecer a quantidade de participantes.
+
+### 2. V1 = [3, 1, 0] e V2 = [3, 2, 0]
+
+V1 aconteceu antes de V2. Todas as posições de V1 são menores ou iguais às de V2, e a segunda posição é menor.
+
+### 3. V1 = [3, 1, 0] e V2 = [1, 3, 0]
+
+Os eventos são concorrentes. V1 é maior na primeira posição e V2 é maior na segunda, então nenhum dos dois vem antes do outro.
+
+## Parte C — Publish/Subscribe entre agências
+
+### Decisões de implementação
+
+A integração usa a biblioteca aio-pika, que é assíncrona e funciona junto com o FastAPI sem precisar de outra thread. A URL do RabbitMQ fica em um arquivo .env, que não vai para o Git porque contém usuário e senha. A rota de crédito remoto do Sprint 1 foi removida.
+
+### 1. O que aconteceu quando a Agência 1 voltou?
+
+Enquanto a Agência 1 estava fora do ar, a mensagem ficou retida na fila. Quando ela voltou, a mensagem foi entregue, mas o log registrou CREDITO_REMOTO_FALHOU porque a conta não existia mais. A mensageria funcionou. O problema é que as contas ficam em memória e foram perdidas no reinício.
+
+### 2. O que melhorou e o que continua em aberto?
+
+A mensagem não se perde mais quando a agência de destino está fora do ar, e a origem não precisa esperar o destino responder. Porém, o débito foi aplicado na origem e o crédito não chegou ao destino. O sistema continua inconsistente, e essa correção fica para o Sprint 4.
+
+### 3. O consumidor sem JWT é um problema de segurança?
+
+Sim. Quem tiver a URL do RabbitMQ consegue publicar uma mensagem de crédito sem passar pela API. Hoje as três agências usam o mesmo usuário, então seria melhor ter um usuário por agência e assinar as mensagens.
+
+## Parte D — Linha do tempo causal
+
+### 1. O que torna confiável a comparação com o relógio vetorial?
+
+O vetor mostra quantos eventos de cada agência eram conhecidos no momento do evento. Comparando posição por posição, dá para saber se um evento veio antes do outro ou se eles são concorrentes. O relógio de Lamport usa só um número e perde essa informação.
+
+### 2. Par concorrente encontrado no teste
+
+O script mostrou como concorrentes a criação da conta na Agência 0, com vetor [1, 0, 0], e a criação da conta na Agência 2, com vetor [0, 0, 1]. Faz sentido, porque as duas agências não trocaram mensagens e uma não sabia do evento da outra. A transferência entre agências não apareceu como concorrente, pois o envio veio antes do crédito.
+
+### 3. O algoritmo O(n²) seria um problema com milhões de eventos?
+
+Sim, porque o número de comparações cresce muito rápido. Uma solução é comparar apenas eventos relacionados, como os da mesma conta ou da mesma operação.
+
+## Funcionalidade adicional escolhida — Seção 2.1
+
+A funcionalidade escolhida foi a fila de mensagens não processadas (dead-letter queue). Ela foi escolhida porque, no teste de resiliência, o crédito para uma conta inexistente era descartado. Agora a mensagem é tentada três vezes e, se continuar falhando, vai para uma fila separada. Assim, ela pode ser analisada depois.
+
+Além da funcionalidade escolhida, foram implementados outros recursos complementares.
+
+### Fila de auditoria
+
+Um consumidor separado recebe uma cópia de todas as mensagens publicadas pelas agências e grava tudo em um log central.
+
+### Notificação de saldo baixo
+
+Quando um saque ou uma transferência deixa a conta com menos de R$ 50,00, a agência publica um alerta em um tópico separado. O limite pode ser alterado por variável de ambiente.
+
+### Confirmação de entrega
+
+Depois de processar o crédito, a agência de destino envia uma confirmação para a agência de origem. A origem passa a saber se o crédito foi aplicado ou se falhou. O comando situacao do frontend mostra essa informação.
+
+## Declaração de uso de IA
+
+Foi utilizada IA para apoiar a implementação do Sprint 2, a captura das evidências e a revisão das respostas.

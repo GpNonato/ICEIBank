@@ -2,6 +2,7 @@ from fastapi import HTTPException, Request
 
 from ..config import LIMITE_SAQUE, agencia_responsavel, formatar_reais
 from ..models import CriarContaEntrada, ValorEntrada
+from ..services.alertas import verificar_saldo_baixo
 
 
 async def criar_conta(dados: CriarContaEntrada, request: Request):
@@ -58,4 +59,5 @@ async def sacar(id_conta: int, dados: ValorEntrada, request: Request):
         "SAQUE", timestamp,
         {"id": id_conta, "valor": dados.valor, "novoSaldo": conta["saldo"]},
     )
+    await verificar_saldo_baixo(estado, conta)
     return conta

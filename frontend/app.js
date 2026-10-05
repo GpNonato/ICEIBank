@@ -15,9 +15,10 @@
     ['depositar <conta> <valor>', 'credita um valor na conta'],
     ['sacar <conta> <valor>', 'debita um valor da conta'],
     ['transferir <origem> <destino> <valor> [id-operacao]', 'faz transferência local ou entre agências'],
+    ['situacao <id-operacao>', 'mostra se o crédito de uma transferência foi confirmado'],
     ['criar <conta> <nome> <saldo>', 'abre uma conta na agência conectada'],
     ['historico <conta>', 'lista os eventos registrados para uma conta'],
-    ['limites', 'mostra os limites de saque e transferência'],
+    ['limites', 'mostra os limites de saque, transferência e saldo baixo'],
     ['extrato <nome>', 'soma as contas de um titular nas três agências'],
     ['status [agencia]', 'mostra o estado e o relógio de uma agência'],
     ['swagger [agencia]', 'abre a documentação da agência'],
@@ -304,7 +305,7 @@
       return req('GET /status', async function () {
         var dadosStatus = await api('GET', '/status', undefined, agenciaStatus);
         out('agência ' + dadosStatus.agencia + ' · ' + dadosStatus.status, DIM);
-        out('relógio de Lamport: ' + dadosStatus.relogioLamport + ' · contas: ' + dadosStatus.quantidadeContas);
+        out('relógio vetorial: [' + dadosStatus.relogioVetorial.join(', ') + '] · contas: ' + dadosStatus.quantidadeContas);
       });
     }
 
@@ -406,14 +407,17 @@
           }
           throw erro;
         }
-        var tipoTransferencia = agO === agD ? 'local' : 'entre agências · agência ' + agD;
+        var situacao = agO === agD
+          ? 'concluída · local'
+          : 'publicada · entre agências · crédito assíncrono na agência ' + agD;
         if (resultadoTransferencia.repetida) {
           out('transferência repetida reconhecida · nenhum valor aplicado novamente', DIM);
         } else {
-          out('transferência de ' + money(v) + ' concluída · ' + tipoTransferencia +
+          out('transferência de ' + money(v) + ' ' + situacao +
               ' · conta ' + origem + ' → conta ' + destino, DIM);
         }
         out('identificador: ' + resultadoTransferencia.idOperacao, DIM);
+        if (agO !== agD) out('acompanhe a confirmação com: situacao ' + resultadoTransferencia.idOperacao, DIM);
         var saldo = await saldoDisponivel(origem);
         if (saldo !== null) out(money(saldo));
       });
@@ -460,7 +464,7 @@
         }
         if (!dadosHistorico.eventos.length) return out('nenhum evento encontrado para a conta ' + idHistorico, DIM);
         dadosHistorico.eventos.forEach(function (evento) {
-          out('[Lamport ' + evento.timestampLamport + '] ' + evento.tipo, DIM);
+          out('[Vetor ' + JSON.stringify(evento.timestampVetorial) + '] ' + evento.tipo, DIM);
           out(JSON.stringify(evento.detalhes), FG, 26);
         });
       });
@@ -472,6 +476,28 @@
         var dadosLimites = await api('GET', '/limites');
         out('limite de saque: ' + money(dadosLimites.limiteSaque), DIM);
         out('limite de transferência: ' + money(dadosLimites.limiteTransferencia), DIM);
+        out('alerta de saldo baixo abaixo de: ' + money(dadosLimites.limiteSaldoBaixo), DIM);
+      });
+    }
+
+    if (c === 'situacao') {
+      if (!autenticado()) return;
+      var idSituacao = p[1];
+      if (!idSituacao) return out('uso: situacao <id-operacao>', DIM);
+      return req('GET /transferencias/' + encodeURIComponent(idSituacao), async function () {
+        var transferencia;
+        try {
+          transferencia = await api('GET', '/transferencias/' + encodeURIComponent(idSituacao));
+        } catch (erro) {
+          if (erro instanceof ErroApi && erro.status === 404) {
+            return out('! transferência ' + idSituacao + ' não encontrada na agência ' + estado.agencia +
+                       ' — consulte na agência de origem');
+          }
+          throw erro;
+        }
+        out('conta ' + transferencia.idOrigem + ' → conta ' + transferencia.idDestino + ' · ' +
+            money(transferencia.valor), DIM);
+        out(transferencia.situacao + (transferencia.motivo ? ' · ' + transferencia.motivo : ''));
       });
     }
 

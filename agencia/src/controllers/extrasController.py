@@ -1,7 +1,7 @@
 import httpx
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Query, Request
 
-from ..config import AGENCIAS, LIMITE_SAQUE, LIMITE_TRANSFERENCIA, agencia_responsavel
+from ..config import AGENCIAS, LIMITE_SALDO_BAIXO, LIMITE_SAQUE, LIMITE_TRANSFERENCIA, agencia_responsavel
 from ..services.authService import gerar_token_agencia
 
 
@@ -22,6 +22,7 @@ async def consultar_limites():
     return {
         "limiteSaque": LIMITE_SAQUE,
         "limiteTransferencia": LIMITE_TRANSFERENCIA,
+        "limiteSaldoBaixo": LIMITE_SALDO_BAIXO,
     }
 
 
@@ -31,21 +32,25 @@ async def consultar_status(request: Request):
         "agencia": estado.id_agencia,
         "url": AGENCIAS[estado.id_agencia]["url"],
         "status": "disponível",
-        "relogioLamport": estado.relogio.valor_atual(),
+        "relogioVetorial": estado.relogio.valor_atual(),
         "quantidadeContas": len(estado.contas),
     }
 
 
-async def listar_contas_internas(nomeAluno: str, timestampLamport: int, request: Request):
+async def listar_contas_internas(
+    nomeAluno: str,
+    request: Request,
+    timestampVetorial: list[int] = Query(),
+):
     estado = request.app.state
-    estado.relogio.ao_receber(timestampLamport)
+    estado.relogio.ao_receber(timestampVetorial)
     contas = [
         conta for conta in estado.contas.values()
         if conta["nomeAluno"].casefold() == nomeAluno.casefold()
     ]
     return {
         "contas": contas,
-        "timestampLamport": estado.relogio.ao_enviar(),
+        "timestampVetorial": estado.relogio.ao_enviar(),
     }
 
 
@@ -68,11 +73,11 @@ async def extrato_consolidado(nome_aluno: str, request: Request):
                 resposta = await cliente.get(
                     f"{agencia['url']}/interno/contas",
                     headers={"Authorization": f"Bearer {token_agencia}"},
-                    params={"nomeAluno": nome_aluno, "timestampLamport": timestamp_envio},
+                    params={"nomeAluno": nome_aluno, "timestampVetorial": timestamp_envio},
                 )
                 resposta.raise_for_status()
             dados = resposta.json()
-            estado.relogio.ao_receber(dados["timestampLamport"])
+            estado.relogio.ao_receber(dados["timestampVetorial"])
             contas.extend(dados["contas"])
         except httpx.HTTPError as erro:
             raise HTTPException(

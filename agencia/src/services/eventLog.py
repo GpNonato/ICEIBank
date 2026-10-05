@@ -12,18 +12,18 @@ class RegistroEventos:
         self.caminho_arquivo = pasta_dados / f"eventos-{nome_agencia}.jsonl"
         self._lock = Lock()
 
-    def registrar(self, tipo: str, timestamp_lamport: int, detalhes: dict) -> dict:
+    def registrar(self, tipo: str, timestamp_vetorial: list[int], detalhes: dict) -> dict:
         evento = {
             "agencia": self.nome_agencia,
             "tipo": tipo,
-            "timestampLamport": timestamp_lamport,
+            "timestampVetorial": timestamp_vetorial,
             "horaParede": datetime.now(timezone.utc).isoformat(),
             "detalhes": detalhes,
         }
         with self._lock:
             with self.caminho_arquivo.open("a", encoding="utf-8") as arquivo:
                 arquivo.write(json.dumps(evento, ensure_ascii=False) + "\n")
-        print(f"[Lamport {timestamp_lamport}] {tipo} {detalhes}", flush=True)
+        print(f"[Vetor {timestamp_vetorial}] {tipo} {detalhes}", flush=True)
         return evento
 
     def listar_por_conta(self, id_conta: int) -> list[dict]:
