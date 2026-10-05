@@ -117,84 +117,70 @@ Foi utilizada IA para a criação do frontend e revisão das respostas.
 
 ### Decisões de implementação
 
-O relógio vetorial fica em `agencia/src/services/vectorClock.py` e segue as três regras do roteiro: `evento_local()` e `ao_enviar()` incrementam a posição da própria agência, e `ao_receber()` faz o máximo posição a posição antes de incrementar. Os métodos usam um `Lock` e devolvem uma cópia do vetor, para que o valor registrado no log não mude depois. O registro de eventos passou a gravar `timestampVetorial` no lugar de `timestampLamport`.
+O relógio vetorial guarda uma posição para cada agência e segue as três regras do roteiro. O registro de eventos passou a gravar o vetor completo no lugar do valor de Lamport.
 
 ### 1. O que acontece com o tamanho do vetor com 10 agências?
 
-Cada mensagem passaria a levar 10 números em vez de 3, porque o vetor tem uma posição por agência. O tamanho cresce de forma linear com a quantidade de processos. Com 10 agências isso não é um problema, pois são poucos bytes perto do resto da mensagem. Passa a ser um problema em sistemas com milhares de processos ou quando processos entram e saem com frequência, porque todos precisam conhecer o tamanho e a ordem do vetor.
+Cada mensagem passaria a levar 10 números, pois o vetor tem uma posição por agência. Com 10 agências isso não é um problema. Em sistemas com milhares de processos, o vetor fica grande e todos precisam conhecer a quantidade de participantes.
 
-### 2. `V1 = [3, 1, 0]` e `V2 = [3, 2, 0]`
+### 2. V1 = [3, 1, 0] e V2 = [3, 2, 0]
 
-O evento de `V1` aconteceu antes. Na posição 0 os valores são iguais (3 e 3), na posição 1 o `V1` é menor (1 e 2) e na posição 2 são iguais (0 e 0). Como `V1[i] <= V2[i]` em todas as posições e os vetores são diferentes, `V1` aconteceu antes de `V2`.
+V1 aconteceu antes de V2. Todas as posições de V1 são menores ou iguais às de V2, e a segunda posição é menor.
 
-### 3. `V1 = [3, 1, 0]` e `V2 = [1, 3, 0]`
+### 3. V1 = [3, 1, 0] e V2 = [1, 3, 0]
 
-Os eventos são concorrentes. Na posição 0 o `V1` é maior (3 e 1), mas na posição 1 o `V2` é maior (1 e 3). Assim, nem `V1 <= V2` nem `V2 <= V1`. Um evento não conhecia o outro quando aconteceu.
+Os eventos são concorrentes. V1 é maior na primeira posição e V2 é maior na segunda, então nenhum dos dois vem antes do outro.
 
 ## Parte C — Publish/Subscribe entre agências
 
 ### Decisões de implementação
 
-A integração usa a biblioteca `aio-pika`, pois ela é assíncrona e roda no mesmo loop do FastAPI. Assim, não é preciso criar uma thread separada para o consumidor. O consumidor é iniciado no `lifespan` da aplicação. A URL do RabbitMQ é lida da variável `RABBITMQ_URL` ou do arquivo `agencia/.env`, que fica fora do Git por conter usuário e senha.
-
-A topologia segue o roteiro: exchange `iceibank.eventos` do tipo `topic`, uma fila durável por agência (`fila-agencia-<id>`) ligada à routing key `agencia.<id>.creditar`, e mensagens persistentes. A rota `/contas/{id}/creditar-remoto` foi removida. Também foi criado o `inspecionar-filas.py`, que mostra quantas mensagens e consumidores cada fila tem sem expor a URL.
-
-Além do débito e do crédito, a agência registra o evento `TRANSFERENCIA_PUBLICADA` com o vetor de `ao_enviar()`. Assim, a linha do tempo mostra o envio da mensagem. Se a publicação falhar, o débito é estornado e a API retorna HTTP 503.
+A integração usa a biblioteca aio-pika, que é assíncrona e funciona junto com o FastAPI sem precisar de outra thread. A URL do RabbitMQ fica em um arquivo .env, que não vai para o Git porque contém usuário e senha. A rota de crédito remoto do Sprint 1 foi removida.
 
 ### 1. O que aconteceu quando a Agência 1 voltou?
 
-Com a Agência 1 fora do ar, a transferência retornou 200 e o `inspecionar-filas.py` mostrou a `fila-agencia-1` com 1 mensagem e 0 consumidores. Quando a agência voltou, a mensagem foi entregue logo após a conexão, e o log registrou `[Vetor [3, 1, 0]] CREDITO_REMOTO_FALHOU` com o motivo `conta não encontrada`. Depois disso, o `/status` mostrou `quantidadeContas: 0`.
+Enquanto a Agência 1 estava fora do ar, a mensagem ficou retida na fila. Quando ela voltou, a mensagem foi entregue, mas o log registrou CREDITO_REMOTO_FALHOU porque a conta não existia mais. A mensageria funcionou. O problema é que as contas ficam em memória e foram perdidas no reinício.
 
-A mensagem não sumiu por falha da mensageria. Ela foi guardada e entregue. O crédito não foi aplicado porque as contas ficam em memória, e a conta 1 deixou de existir quando a agência reiniciou. O vetor `[3, 1, 0]` também mostra que o relógio recomeçou do zero.
+### 2. O que melhorou e o que continua em aberto?
 
-### 2. O que melhorou em relação ao Sprint 1 e o que continua em aberto?
-
-No Sprint 1, a chamada REST falhava na hora quando a agência de destino estava fora do ar. Agora, a origem publica a mensagem e não depende da disponibilidade do destino, e a mensagem durável espera a agência voltar.
-
-Porém, a mensagem não se perder não significa que o sistema está correto. No teste, a conta 0 foi debitada em R$ 10,00 e a conta 1 não recebeu o crédito. A operação continua sem atomicidade e o estado das contas continua em memória. A resposta 200 agora significa apenas que a mensagem foi publicada. Com as funcionalidades adicionais, a origem passa a saber que o crédito falhou, mas o valor ainda não é devolvido automaticamente. Essa compensação fica para o Sprint 4, com Saga ou 2PC.
+A mensagem não se perde mais quando a agência de destino está fora do ar, e a origem não precisa esperar o destino responder. Porém, o débito foi aplicado na origem e o crédito não chegou ao destino. O sistema continua inconsistente, e essa correção fica para o Sprint 4.
 
 ### 3. O consumidor sem JWT é um problema de segurança?
 
-Sim. O consumidor confia em qualquer mensagem que chega à fila. No meu ambiente, quem tiver a `RABBITMQ_URL` pode publicar em `agencia.1.creditar` e criar um crédito falso, sem passar pela API e sem token. Hoje a URL fica apenas no `.env` local, mas as três agências usam o mesmo usuário do RabbitMQ.
-
-Para reduzir o risco, cada agência poderia ter um usuário próprio no RabbitMQ, com permissão apenas para as filas e routing keys necessárias. As mensagens também poderiam ser assinadas, por exemplo com JWT ou HMAC, e o consumidor validaria a assinatura e a agência de origem. A conexão já usa TLS (`amqps`), o que protege o tráfego, mas não impede publicações de quem possui a credencial.
+Sim. Quem tiver a URL do RabbitMQ consegue publicar uma mensagem de crédito sem passar pela API. Hoje as três agências usam o mesmo usuário, então seria melhor ter um usuário por agência e assinar as mensagens.
 
 ## Parte D — Linha do tempo causal
 
 ### 1. O que torna confiável a comparação com o relógio vetorial?
 
-O vetor guarda quantos eventos de cada agência eram conhecidos no momento do evento. Ao comparar posição a posição, dá para saber se um evento já conhecia tudo o que o outro conhecia (`ANTES`/`DEPOIS`) ou se cada um conhecia algo que o outro não conhecia (`CONCORRENTES`). O relógio de Lamport junta tudo em um único número e perde essa informação.
+O vetor mostra quantos eventos de cada agência eram conhecidos no momento do evento. Comparando posição por posição, dá para saber se um evento veio antes do outro ou se eles são concorrentes. O relógio de Lamport usa só um número e perde essa informação.
 
 ### 2. Par concorrente encontrado no teste
 
-O script mostrou `[agencia-0] CRIAR_CONTA ([1, 0, 0])  x  [agencia-2] CRIAR_CONTA ([0, 0, 1])`. Os dois eventos são criações de contas em agências diferentes, sem nenhuma mensagem entre elas. A Agência 2 não conhecia nenhum evento da Agência 0, pois tinha 0 na primeira posição, e a Agência 0 também não conhecia a Agência 2. Por isso, um evento não pode ter causado o outro.
-
-A transferência entre agências não apareceu na lista de concorrentes. O script mostrou `TRANSFERENCIA_PUBLICADA ([3, 0, 0])  ANTES  TRANSFERENCIA_CREDITO_REMOTO ([3, 2, 0])`. Pela hora de parede, o crédito apareceu antes da publicação, porque a agência só grava `TRANSFERENCIA_PUBLICADA` depois da confirmação do RabbitMQ. O relógio vetorial mostrou a ordem causal correta.
+O script mostrou como concorrentes a criação da conta na Agência 0, com vetor [1, 0, 0], e a criação da conta na Agência 2, com vetor [0, 0, 1]. Faz sentido, porque as duas agências não trocaram mensagens e uma não sabia do evento da outra. A transferência entre agências não apareceu como concorrente, pois o envio veio antes do crédito.
 
 ### 3. O algoritmo O(n²) seria um problema com milhões de eventos?
 
-Sim. Com um milhão de eventos, seriam cerca de 500 bilhões de comparações. Para escalar, a análise pode comparar apenas eventos relacionados, como os da mesma conta ou do mesmo `idOperacao`. Também pode ser feita em janelas de tempo, de forma incremental conforme os eventos chegam, ou em paralelo por partição.
+Sim, porque o número de comparações cresce muito rápido. Uma solução é comparar apenas eventos relacionados, como os da mesma conta ou da mesma operação.
 
 ## Funcionalidade adicional escolhida — Seção 2.1
 
-A funcionalidade escolhida foi a fila de mensagens não processadas (dead-letter queue). Ela foi escolhida porque o teste da Parte C mostrou um crédito que falhava por conta não encontrada e era simplesmente descartado. Agora, as filas das agências são declaradas com `x-dead-letter-exchange: iceibank.mortas`. A mensagem que falha volta para a fila e é tentada até 3 vezes. Na terceira falha, a agência a rejeita sem requeue e o RabbitMQ a encaminha para a `fila-mensagens-mortas`, mantendo o conteúdo original e o cabeçalho `x-death`. Assim, a mensagem fica disponível para análise ou reprocessamento manual. O comando `inspecionar-filas.py --mortas` lista essas mensagens sem retirá-las da fila. A evidência está em `evidencias/sprint2/funcionalidade-adicional.png`.
+A funcionalidade escolhida foi a fila de mensagens não processadas (dead-letter queue). Ela foi escolhida porque, no teste de resiliência, o crédito para uma conta inexistente era descartado. Agora a mensagem é tentada três vezes e, se continuar falhando, vai para uma fila separada. Assim, ela pode ser analisada depois.
 
-Além da funcionalidade escolhida, foram implementados outros recursos complementares. A evidência deles está em `evidencias/sprint2/funcionalidades-extras.png`.
+Além da funcionalidade escolhida, foram implementados outros recursos complementares.
 
 ### Fila de auditoria
 
-O módulo `src.auditoria` assina a exchange com a routing key `#` e recebe uma cópia de todas as mensagens publicadas por todas as agências. As mensagens são gravadas em `agencia/data/auditoria/auditoria-central.jsonl`. A fila é durável, então as mensagens publicadas com o auditor parado são registradas quando ele voltar.
+Um consumidor separado recebe uma cópia de todas as mensagens publicadas pelas agências e grava tudo em um log central.
 
 ### Notificação de saldo baixo
 
-Depois de um saque ou de uma transferência, se o saldo ficar abaixo de R$ 50,00, a agência publica um alerta em `agencia.<id>.alerta.saldo-baixo`. Esse tópico é separado do crédito e não chega às filas das agências. A auditoria recebe o alerta e o destaca com `[ALERTA]`. O limite pode ser alterado pela variável `LIMITE_SALDO_BAIXO` e aparece no comando `limites`.
+Quando um saque ou uma transferência deixa a conta com menos de R$ 50,00, a agência publica um alerta em um tópico separado. O limite pode ser alterado por variável de ambiente.
 
 ### Confirmação de entrega
 
-Depois de processar um crédito, a agência de destino publica uma confirmação em `agencia.<origem>.confirmacao`, com o status `creditado` ou `falhou`. A agência de origem consome essa mensagem na sua própria fila, atualiza o relógio vetorial e a situação da transferência. A situação pode ser consultada em `GET /transferencias/{idOperacao}` ou com o comando `situacao <id>` no frontend.
-
-Durante os testes, a confirmação chegou a ser consumida antes de a origem terminar de responder a requisição da transferência, porque a origem ainda esperava o ack do RabbitMQ. Para corrigir, os dados da transferência passaram a ser guardados antes da publicação.
+Depois de processar o crédito, a agência de destino envia uma confirmação para a agência de origem. A origem passa a saber se o crédito foi aplicado ou se falhou. O comando situacao do frontend mostra essa informação.
 
 ## Declaração de uso de IA
 
-Foi utilizada IA (Claude) para apoiar a implementação do Sprint 2, os scripts de captura das evidências e a redação e revisão das respostas.
+Foi utilizada IA para apoiar a implementação do Sprint 2, a captura das evidências e a revisão das respostas.
