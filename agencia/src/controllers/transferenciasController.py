@@ -38,15 +38,17 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
         raise HTTPException(400, "Saldo insuficiente.")
 
     agencia_destino = agencia_responsavel(dados.idDestino)
-    estado.transferencias_processadas[id_operacao] = {"status": "processando"}
-    timestamp_debito = estado.relogio.evento_local()
-    conta_origem["saldo"] -= dados.valor
     detalhes = {
         "idOrigem": dados.idOrigem,
         "idDestino": dados.idDestino,
         "valor": dados.valor,
         "idOperacao": id_operacao,
     }
+    # Os detalhes ficam guardados antes de publicar: a confirmação do destino pode
+    # ser consumida enquanto esta requisição ainda aguarda o ack do broker.
+    estado.transferencias_processadas[id_operacao] = {"status": "processando", "detalhes": detalhes}
+    timestamp_debito = estado.relogio.evento_local()
+    conta_origem["saldo"] -= dados.valor
     estado.registro.registrar("TRANSFERENCIA_DEBITO", timestamp_debito, detalhes)
 
     if agencia_destino == estado.id_agencia:
@@ -106,12 +108,10 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
 
 def concluir(estado, id_operacao: str, mensagem: str, situacao: str, detalhes: dict) -> dict:
     resposta = {"mensagem": mensagem, "idOperacao": id_operacao, "repetida": False}
-    estado.transferencias_processadas[id_operacao] = {
-        "status": "concluida",
-        "resposta": resposta,
-        "situacao": situacao,
-        "detalhes": detalhes,
-    }
+    registro = estado.transferencias_processadas.setdefault(id_operacao, {})
+    registro.update({"status": "concluida", "resposta": resposta, "detalhes": detalhes})
+    # Se a confirmação já chegou, a situação atualizada por ela é mantida.
+    registro.setdefault("situacao", situacao)
     return resposta
 
 
