@@ -170,6 +170,12 @@ transferir 0 1 10 demonstracao-1
 
 A segunda chamada será reconhecida e não movimentará o saldo novamente.
 
+## Respostas e evidências
+
+As respostas dos roteiros estão em `RESPOSTAS.md`, e as do quiz de recapitulação
+do Sprint 2 estão em `RESPOSTAS-FLUXO-EXECUCAO.md`. Os prints de cada sprint ficam em
+`evidencias/`.
+
 ## Autenticação
 
 O endpoint `POST /auth/login` recebe `usuario` e `senha`. As credenciais locais padrão são:
