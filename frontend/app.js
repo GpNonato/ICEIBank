@@ -15,6 +15,7 @@
     ['depositar <conta> <valor>', 'credita um valor na conta'],
     ['sacar <conta> <valor>', 'debita um valor da conta'],
     ['transferir <origem> <destino> <valor> [id-operacao]', 'faz transferência local ou entre agências'],
+    ['situacao <id-operacao>', 'mostra se o crédito de uma transferência foi confirmado'],
     ['criar <conta> <nome> <saldo>', 'abre uma conta na agência conectada'],
     ['historico <conta>', 'lista os eventos registrados para uma conta'],
     ['limites', 'mostra os limites de saque, transferência e saldo baixo'],
@@ -416,6 +417,7 @@
               ' · conta ' + origem + ' → conta ' + destino, DIM);
         }
         out('identificador: ' + resultadoTransferencia.idOperacao, DIM);
+        if (agO !== agD) out('acompanhe a confirmação com: situacao ' + resultadoTransferencia.idOperacao, DIM);
         var saldo = await saldoDisponivel(origem);
         if (saldo !== null) out(money(saldo));
       });
@@ -475,6 +477,27 @@
         out('limite de saque: ' + money(dadosLimites.limiteSaque), DIM);
         out('limite de transferência: ' + money(dadosLimites.limiteTransferencia), DIM);
         out('alerta de saldo baixo abaixo de: ' + money(dadosLimites.limiteSaldoBaixo), DIM);
+      });
+    }
+
+    if (c === 'situacao') {
+      if (!autenticado()) return;
+      var idSituacao = p[1];
+      if (!idSituacao) return out('uso: situacao <id-operacao>', DIM);
+      return req('GET /transferencias/' + encodeURIComponent(idSituacao), async function () {
+        var transferencia;
+        try {
+          transferencia = await api('GET', '/transferencias/' + encodeURIComponent(idSituacao));
+        } catch (erro) {
+          if (erro instanceof ErroApi && erro.status === 404) {
+            return out('! transferência ' + idSituacao + ' não encontrada na agência ' + estado.agencia +
+                       ' — consulte na agência de origem');
+          }
+          throw erro;
+        }
+        out('conta ' + transferencia.idOrigem + ' → conta ' + transferencia.idDestino + ' · ' +
+            money(transferencia.valor), DIM);
+        out(transferencia.situacao + (transferencia.motivo ? ' · ' + transferencia.motivo : ''));
       });
     }
 

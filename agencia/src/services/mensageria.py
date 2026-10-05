@@ -66,12 +66,17 @@ async def consumir(
 
 async def assinar(
     id_agencia: int,
-    ao_receber_mensagem: Callable[[dict], Awaitable[None]],
+    tratadores: dict[str, Callable[[dict], Awaitable[None]]],
 ) -> None:
+    # Uma única fila por agência, ligada a uma routing key por tipo de mensagem
+    # (ex.: agencia.1.creditar e agencia.1.confirmacao).
+    async def despachar(routing_key: str, conteudo: dict) -> None:
+        await tratadores[routing_key.rsplit(".", 1)[1]](conteudo)
+
     await consumir(
         f"fila-agencia-{id_agencia}",
-        [f"agencia.{id_agencia}.creditar"],
-        lambda _chave, conteudo: ao_receber_mensagem(conteudo),
+        [f"agencia.{id_agencia}.{tipo}" for tipo in tratadores],
+        despachar,
     )
 
 

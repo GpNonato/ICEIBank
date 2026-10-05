@@ -123,6 +123,19 @@ não chega às filas das agências; a fila de auditoria recebe o alerta e o dest
 `[ALERTA]`. O limite pode ser alterado pela variável `LIMITE_SALDO_BAIXO` e aparece no
 comando `limites` do terminal web.
 
+### Confirmação de entrega
+
+Depois de processar um crédito, a agência de destino publica uma confirmação na routing
+key `agencia.<origem>.confirmacao`, com `status` `creditado` ou `falhou` (e o motivo).
+A fila da agência de origem também está ligada a essa routing key; ao consumir a
+confirmação, a origem atualiza o relógio vetorial e a situação da transferência. A
+situação pode ser consultada em `GET /transferencias/{idOperacao}` ou, no terminal web,
+com `situacao <id-operacao>`:
+
+- `aguardando confirmação`: o crédito foi publicado e ainda não houve resposta;
+- `creditada no destino`: o destino aplicou o crédito;
+- `crédito não aplicado no destino`: o destino não conseguiu aplicar o crédito.
+
 ## Funcionalidades adicionais do Sprint 1
 
 O sistema possui histórico por conta, limite de R$ 1.000,00 por saque e transferência, extrato consolidado entre as três agências, idempotência de transferências e rota de status. Os limites podem ser alterados pelas variáveis `LIMITE_SAQUE` e `LIMITE_TRANSFERENCIA`.

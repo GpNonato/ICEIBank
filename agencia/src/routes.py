@@ -33,6 +33,10 @@ router.add_api_route(
     methods=["POST"], dependencies=protecao_usuario,
 )
 router.add_api_route(
+    "/transferencias/{id_operacao}", transferenciasController.consultar_transferencia,
+    methods=["GET"], dependencies=protecao_usuario,
+)
+router.add_api_route(
     "/contas/{id_conta}/historico",
     extrasController.historico_conta,
     methods=["GET"],

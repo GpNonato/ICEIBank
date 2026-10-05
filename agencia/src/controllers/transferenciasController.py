@@ -59,7 +59,9 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
         conta_destino["saldo"] += dados.valor
         estado.registro.registrar("TRANSFERENCIA_CREDITO", timestamp_credito, detalhes)
         await verificar_saldo_baixo(estado, conta_origem)
-        return concluir(estado, id_operacao, "Transferência concluída (mesma agência).")
+        return concluir(
+            estado, id_operacao, "Transferência concluída (mesma agência).", "concluida", detalhes,
+        )
 
     # Em vez de chamar a outra agência por REST (Sprint 1), a agência publica um
     # evento na exchange. A agência de destino consome quando estiver disponível;
@@ -70,6 +72,7 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
             f"agencia.{agencia_destino}.creditar",
             {
                 "idConta": dados.idDestino,
+                "idOrigem": dados.idOrigem,
                 "valor": dados.valor,
                 "vetorEnvio": timestamp_envio,
                 "origemAgencia": estado.id_agencia,
@@ -96,16 +99,31 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
         estado,
         id_operacao,
         "Transferência publicada para a agência de destino (entrega assíncrona).",
+        "aguardando confirmação",
+        detalhes,
     )
 
 
-def concluir(estado, id_operacao: str, mensagem: str) -> dict:
+def concluir(estado, id_operacao: str, mensagem: str, situacao: str, detalhes: dict) -> dict:
     resposta = {"mensagem": mensagem, "idOperacao": id_operacao, "repetida": False}
     estado.transferencias_processadas[id_operacao] = {
         "status": "concluida",
         "resposta": resposta,
+        "situacao": situacao,
+        "detalhes": detalhes,
     }
     return resposta
+
+
+async def consultar_transferencia(id_operacao: str, request: Request):
+    registro = request.app.state.transferencias_processadas.get(id_operacao)
+    if registro is None or registro["status"] != "concluida":
+        raise HTTPException(404, "Transferência não encontrada nesta agência.")
+    return {
+        **registro["detalhes"],
+        "situacao": registro["situacao"],
+        **({"motivo": registro["motivo"]} if "motivo" in registro else {}),
+    }
 
 
 async def processar_credito_remoto(estado, mensagem: dict) -> None:
@@ -128,8 +146,61 @@ async def processar_credito_remoto(estado, mensagem: dict) -> None:
             timestamp,
             {**detalhes, "motivo": "conta não encontrada"},
         )
+        await publicar_confirmacao(estado, mensagem, "falhou", "conta não encontrada")
         return
 
     conta["saldo"] += mensagem["valor"]
     estado.creditos_processados[id_operacao] = timestamp
     estado.registro.registrar("TRANSFERENCIA_CREDITO_REMOTO", timestamp, detalhes)
+    await publicar_confirmacao(estado, mensagem, "creditado")
+
+
+async def publicar_confirmacao(estado, mensagem: dict, status: str, motivo: str | None = None) -> None:
+    chave = f"agencia.{mensagem['origemAgencia']}.confirmacao"
+    timestamp = estado.relogio.ao_enviar()
+    confirmacao = {
+        "idOperacao": mensagem["idOperacao"],
+        "idConta": mensagem["idConta"],
+        "valor": mensagem["valor"],
+        "status": status,
+        "agenciaDestino": estado.id_agencia,
+        "vetorEnvio": timestamp,
+        **({"motivo": motivo} if motivo else {}),
+    }
+    detalhes = {
+        "idConta": mensagem["idConta"],
+        "idOperacao": mensagem["idOperacao"],
+        "status": status,
+        "routingKey": chave,
+    }
+    try:
+        await mensageria.publicar(chave, confirmacao)
+    except Exception as erro:
+        # O crédito já foi tratado; a falha da confirmação não deve rejeitar a mensagem.
+        estado.registro.registrar(
+            "CONFIRMACAO_FALHOU", timestamp, {**detalhes, "erro": type(erro).__name__},
+        )
+        return
+    estado.registro.registrar("CONFIRMACAO_PUBLICADA", timestamp, detalhes)
+
+
+async def processar_confirmacao(estado, mensagem: dict) -> None:
+    timestamp = estado.relogio.ao_receber(mensagem["vetorEnvio"])
+    registro = estado.transferencias_processadas.get(mensagem["idOperacao"])
+    detalhes = {
+        **(registro["detalhes"] if registro else {"idDestino": mensagem["idConta"]}),
+        "idOperacao": mensagem["idOperacao"],
+        "agenciaDestino": mensagem["agenciaDestino"],
+    }
+    if mensagem["status"] == "creditado":
+        if registro:
+            registro["situacao"] = "creditada no destino"
+        estado.registro.registrar("CONFIRMACAO_CREDITO", timestamp, detalhes)
+        return
+
+    if registro:
+        registro["situacao"] = "crédito não aplicado no destino"
+        registro["motivo"] = mensagem.get("motivo")
+    estado.registro.registrar(
+        "CREDITO_NAO_CONFIRMADO", timestamp, {**detalhes, "motivo": mensagem.get("motivo")},
+    )
