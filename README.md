@@ -56,6 +56,20 @@ resposta HTTP 200 significa que a mensagem foi publicada; o crédito é aplicado
 agência de destino consome a fila, mesmo que ela esteja fora do ar no momento da
 publicação.
 
+## Linha do tempo causal
+
+Cada agência grava seus eventos em `agencia/data/eventos-agencia-<id>.jsonl` com o
+relógio vetorial (`timestampVetorial`). Para unir os logs e identificar os pares de
+eventos concorrentes entre agências diferentes:
+
+```powershell
+.\.venv\Scripts\python.exe mesclar-logs.py
+```
+
+O script lista os eventos por hora de parede, compara os vetores de todos os pares de
+agências diferentes e mostra, para cada transferência entre agências, a relação causal
+entre a publicação e o recebimento.
+
 ## Terminal web
 
 Com as agências no ar, abra `http://localhost:4042` no navegador. A pasta `frontend/`
