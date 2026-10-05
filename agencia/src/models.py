@@ -20,7 +20,7 @@ class TransferenciaEntrada(BaseModel):
 
 class CreditoRemotoEntrada(BaseModel):
     valor: float
-    timestampLamport: int
+    timestampVetorial: list[int]
     origemAgencia: int
     idOperacao: str
 

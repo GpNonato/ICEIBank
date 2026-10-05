@@ -304,7 +304,7 @@
       return req('GET /status', async function () {
         var dadosStatus = await api('GET', '/status', undefined, agenciaStatus);
         out('agência ' + dadosStatus.agencia + ' · ' + dadosStatus.status, DIM);
-        out('relógio de Lamport: ' + dadosStatus.relogioLamport + ' · contas: ' + dadosStatus.quantidadeContas);
+        out('relógio vetorial: [' + dadosStatus.relogioVetorial.join(', ') + '] · contas: ' + dadosStatus.quantidadeContas);
       });
     }
 
@@ -460,7 +460,7 @@
         }
         if (!dadosHistorico.eventos.length) return out('nenhum evento encontrado para a conta ' + idHistorico, DIM);
         dadosHistorico.eventos.forEach(function (evento) {
-          out('[Lamport ' + evento.timestampLamport + '] ' + evento.tipo, DIM);
+          out('[Vetor ' + JSON.stringify(evento.timestampVetorial) + '] ' + evento.tipo, DIM);
           out(JSON.stringify(evento.detalhes), FG, 26);
         });
       });

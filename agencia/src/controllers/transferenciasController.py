@@ -81,7 +81,7 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
                 headers={"Authorization": f"Bearer {token_agencia}"},
                 json={
                     "valor": dados.valor,
-                    "timestampLamport": timestamp_envio,
+                    "timestampVetorial": timestamp_envio,
                     "origemAgencia": estado.id_agencia,
                     "idOperacao": id_operacao,
                 },
@@ -116,7 +116,7 @@ async def transferir(dados: TransferenciaEntrada, request: Request):
 
 async def creditar_remoto(id_conta: int, dados: CreditoRemotoEntrada, request: Request):
     estado = request.app.state
-    timestamp = estado.relogio.ao_receber(dados.timestampLamport)
+    timestamp = estado.relogio.ao_receber(dados.timestampVetorial)
     anterior = estado.creditos_processados.get(dados.idOperacao)
     if anterior is not None:
         return {**anterior, "repetida": True}

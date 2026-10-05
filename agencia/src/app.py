@@ -8,11 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import AGENCIAS, obter_agencia
+from .config import AGENCIAS, NUMERO_AGENCIAS, obter_agencia
 from .routes import router
 from .services import authService
 from .services.eventLog import RegistroEventos
-from .services.lamportClock import RelogioLamport
+from .services.vectorClock import RelogioVetorial
 
 
 id_agencia = int(os.getenv("AGENCIA_ID", "0"))
@@ -27,7 +27,7 @@ app = FastAPI(
     openapi_url=None,
 )
 app.state.id_agencia = id_agencia
-app.state.relogio = RelogioLamport()
+app.state.relogio = RelogioVetorial(id_agencia, NUMERO_AGENCIAS)
 app.state.registro = RegistroEventos(f"agencia-{id_agencia}")
 app.state.contas = {}
 app.state.transferencias_processadas = {}
