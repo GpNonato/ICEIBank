@@ -13,11 +13,26 @@ class TrocaDeLider {
   final DateTime em;
 }
 
-/// Consulta periódica de GET /bully/lider.
+/// Resultado da última consulta a uma agência.
+class EstadoAgencia {
+  EstadoAgencia({required this.id, required this.online, this.lider, this.latenciaMs, required this.verificadaEm});
+
+  final int id;
+  final bool online;
+
+  /// Quem esta agência considera a líder.
+  final int? lider;
+  final int? latenciaMs;
+  final DateTime verificadaEm;
+}
+
+/// Consulta periódica de GET /bully/lider nas 3 agências, em paralelo.
 ///
-/// Usa a agência que respondeu por último; se ela não responder, tenta as outras
-/// agências conhecidas antes de desistir. A consulta para enquanto o app está em
-/// segundo plano, para não gastar bateria e rede à toa.
+/// A líder exibida é a informada pela agência que respondeu por último; se ela não
+/// responder, vale a resposta da próxima agência conhecida. Como todas são
+/// consultadas, o app também sabe quais agências estão ativas e percebe quando elas
+/// ainda divergem sobre a líder (eleição em andamento). A consulta para enquanto o
+/// app está em segundo plano, para não gastar bateria e rede à toa.
 class LiderancaServico extends ChangeNotifier with WidgetsBindingObserver {
   LiderancaServico(this.api);
 
@@ -29,6 +44,9 @@ class LiderancaServico extends ChangeNotifier with WidgetsBindingObserver {
   String? erro;
   bool consultando = false;
 
+  /// Estado de cada agência na última consulta (indicador de agências ativas).
+  final Map<int, EstadoAgencia> agencias = {};
+
   /// Trocas de liderança percebidas pelo app desde que a tela foi aberta.
   final List<TrocaDeLider> trocas = [];
 
@@ -39,6 +57,11 @@ class LiderancaServico extends ChangeNotifier with WidgetsBindingObserver {
     }
     return null;
   }
+
+  int get ativas => agencias.values.where((a) => a.online).length;
+
+  /// As agências que responderam não concordam sobre a líder.
+  bool get divergencia => agencias.values.where((a) => a.online).map((a) => a.lider).toSet().length > 1;
 
   int _preferida = 0;
   Timer? _timer;
@@ -74,30 +97,42 @@ class LiderancaServico extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<EstadoAgencia> _consultarAgencia(int agencia) async {
+    final inicio = DateTime.now();
+    try {
+      final dados = await api.get(agencia, '/bully/lider', timeout: Configuracao.timeoutLideranca);
+      return EstadoAgencia(
+        id: agencia,
+        online: true,
+        lider: (dados['liderAtual'] as num?)?.toInt(),
+        latenciaMs: DateTime.now().difference(inicio).inMilliseconds,
+        verificadaEm: DateTime.now(),
+      );
+    } on SemConexao {
+      return EstadoAgencia(id: agencia, online: false, verificadaEm: DateTime.now());
+    } on ApiErro {
+      return EstadoAgencia(id: agencia, online: false, verificadaEm: DateTime.now());
+    }
+  }
+
   Future<void> consultar() async {
     if (consultando) return;
     consultando = true;
     notifyListeners();
 
-    final ordem = [
-      for (var i = 0; i < Configuracao.numeroAgencias; i++) (_preferida + i) % Configuracao.numeroAgencias,
-    ];
-    int? respondeu;
-    int? novoLider;
-    for (final agencia in ordem) {
-      try {
-        final dados = await api.get(agencia, '/bully/lider', timeout: Configuracao.timeoutLideranca);
-        novoLider = (dados['liderAtual'] as num?)?.toInt();
-        respondeu = agencia;
-        break;
-      } on SemConexao {
-        continue; // tenta a próxima agência
-      } on ApiErro {
-        continue;
-      }
+    final resultados = await Future.wait([
+      for (var i = 0; i < Configuracao.numeroAgencias; i++) _consultarAgencia(i),
+    ]);
+    for (final r in resultados) {
+      agencias[r.id] = r;
     }
 
     consultando = false;
+    // agência preferida primeiro; se ela não respondeu, a próxima conhecida
+    final ordem = [
+      for (var i = 0; i < Configuracao.numeroAgencias; i++) (_preferida + i) % Configuracao.numeroAgencias,
+    ];
+    final respondeu = ordem.where((i) => agencias[i]!.online).firstOrNull;
     if (respondeu == null) {
       erro = 'Nenhuma das 3 agências respondeu.';
       agenciaConsultada = null;
@@ -105,6 +140,7 @@ class LiderancaServico extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
+    final novoLider = agencias[respondeu]!.lider;
     _preferida = respondeu;
     agenciaConsultada = respondeu;
     erro = null;

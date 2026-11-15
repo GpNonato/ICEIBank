@@ -4,6 +4,7 @@ import '../config.dart';
 import '../servicos/lideranca.dart';
 import '../tema.dart';
 import '../util/formatos.dart';
+import '../widgets/indicador_agencias.dart';
 
 /// Aba "Agências": detalhes da eleição de líder (algoritmo de Bully).
 class AgenciasTela extends StatelessWidget {
@@ -61,14 +62,36 @@ class AgenciasTela extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Consulta automática a cada ${Configuracao.intervaloLideranca.inSeconds} s. '
-                      'Se a agência não responder, o app tenta as outras.',
+                      'Consulta automática das 3 agências a cada ${Configuracao.intervaloLideranca.inSeconds} s. '
+                      'Se a agência consultada não responder, vale a resposta da próxima.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 12, color: Cores.textoSecundario),
                     ),
                   ],
                 ),
               ),
+              TituloSecao('Agências ativas (${lideranca.ativas} de ${Configuracao.numeroAgencias})'),
+              ListaAgencias(lideranca: lideranca),
+              if (lideranca.divergencia)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Bloco(
+                    cor: const Color(0xFFFFF7ED),
+                    padding: const EdgeInsets.all(12),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.how_to_vote_rounded, color: Cores.alerta),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'As agências ainda divergem sobre a líder: há uma eleição em andamento.',
+                            style: TextStyle(color: Cores.alerta, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               const TituloSecao('Trocas percebidas pelo app'),
               Bloco(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),

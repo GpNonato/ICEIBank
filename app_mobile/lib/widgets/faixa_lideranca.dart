@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../servicos/lideranca.dart';
 import '../tema.dart';
 import '../util/formatos.dart';
+import 'indicador_agencias.dart';
 
 /// Resumo da agência líder, atualizado sozinho a cada consulta periódica.
 class FaixaLideranca extends StatelessWidget {
@@ -35,9 +36,15 @@ class FaixaLideranca extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'AGÊNCIA LÍDER',
-                      style: TextStyle(fontSize: 11, letterSpacing: 1.1, color: Cores.textoSecundario),
+                    Row(
+                      children: [
+                        const Text(
+                          'AGÊNCIA LÍDER',
+                          style: TextStyle(fontSize: 11, letterSpacing: 1.1, color: Cores.textoSecundario),
+                        ),
+                        const Spacer(),
+                        PontosAgencias(lideranca: lideranca),
+                      ],
                     ),
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 350),
