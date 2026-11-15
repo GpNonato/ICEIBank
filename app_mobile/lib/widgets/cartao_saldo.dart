@@ -4,11 +4,21 @@ import '../servicos/contas.dart';
 import '../tema.dart';
 import '../util/formatos.dart';
 
-/// Saldo da conta selecionada, com opção de ocultar o valor.
+/// Saldo da conta selecionada, com opção de ocultar o valor. Quando há operações
+/// feitas offline aguardando sincronização, mostra o saldo provisório (UI otimista)
+/// e o último saldo confirmado pela agência.
 class CartaoSaldo extends StatefulWidget {
-  const CartaoSaldo({super.key, required this.conta, required this.aoTrocarConta});
+  const CartaoSaldo({
+    super.key,
+    required this.conta,
+    required this.saldoProvisorio,
+    required this.pendentes,
+    required this.aoTrocarConta,
+  });
 
   final Conta conta;
+  final double saldoProvisorio;
+  final int pendentes;
   final VoidCallback aoTrocarConta;
 
   @override
@@ -18,9 +28,12 @@ class CartaoSaldo extends StatefulWidget {
 class _CartaoSaldoState extends State<CartaoSaldo> {
   bool _oculto = false;
 
+  String _valor(double v) => _oculto ? 'R\$ ••••••' : dinheiro(v);
+
   @override
   Widget build(BuildContext context) {
     final conta = widget.conta;
+    final provisorio = widget.pendentes > 0;
     return Bloco(
       padding: const EdgeInsets.fromLTRB(18, 16, 12, 18),
       child: Column(
@@ -43,12 +56,18 @@ class _CartaoSaldoState extends State<CartaoSaldo> {
           ),
           Text(conta.nomeAluno, style: const TextStyle(fontSize: 15, color: Cores.texto)),
           const SizedBox(height: 6),
+          if (provisorio)
+            const Text('SALDO PROVISÓRIO',
+                style: TextStyle(fontSize: 11, letterSpacing: 1.1, color: Cores.alerta, fontWeight: FontWeight.w700)),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                _oculto ? 'R\$ ••••••' : dinheiro(conta.saldo),
-                style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Cores.texto),
+                _valor(provisorio ? widget.saldoProvisorio : conta.saldo),
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.w800,
+                  color: provisorio ? Cores.alerta : Cores.texto,
+                ),
               ),
               const SizedBox(width: 8),
               IconButton(
@@ -61,14 +80,28 @@ class _CartaoSaldoState extends State<CartaoSaldo> {
               ),
             ],
           ),
-          const SizedBox(height: 2),
+          if (provisorio)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '${widget.pendentes} ${widget.pendentes == 1 ? 'operação aguardando' : 'operações aguardando'} '
+                'sincronização · confirmado pela agência: ${_valor(conta.saldo)}',
+                style: const TextStyle(fontSize: 12, color: Cores.alerta, fontWeight: FontWeight.w600),
+              ),
+            ),
           Row(
             children: [
-              const Icon(Icons.schedule_rounded, size: 14, color: Cores.textoSecundario),
+              Icon(
+                conta.doCache ? Icons.cloud_off_rounded : Icons.schedule_rounded,
+                size: 14,
+                color: conta.doCache ? Cores.alerta : Cores.textoSecundario,
+              ),
               const SizedBox(width: 4),
               Text(
-                'Atualizado às ${hora(conta.atualizadaEm)}',
-                style: const TextStyle(fontSize: 12, color: Cores.textoSecundario),
+                conta.doCache
+                    ? 'Dados salvos às ${hora(conta.atualizadaEm)} (offline)'
+                    : 'Atualizado às ${hora(conta.atualizadaEm)}',
+                style: TextStyle(fontSize: 12, color: conta.doCache ? Cores.alerta : Cores.textoSecundario),
               ),
               const Spacer(),
               Text(

@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../servicos/api.dart';
+import '../servicos/conectividade.dart';
 import '../servicos/contas.dart';
 import '../servicos/lideranca.dart';
 import '../servicos/sessao.dart';
@@ -11,19 +12,21 @@ import '../widgets/faixa_lideranca.dart';
 import '../widgets/folhas.dart';
 import '../widgets/item_operacao.dart';
 
-/// Aba "Início": saudação, líder atual, saldo, ações rápidas e atividade recente.
+/// Aba "Início": saudação, líder atual, saldo, fila offline, ações rápidas e atividade.
 class InicioTela extends StatefulWidget {
   const InicioTela({
     super.key,
     required this.sessao,
     required this.lideranca,
     required this.contas,
+    required this.conectividade,
     required this.aoAbrirAgencias,
   });
 
   final Sessao sessao;
   final LiderancaServico lideranca;
   final ContasServico contas;
+  final ConectividadeServico conectividade;
   final VoidCallback aoAbrirAgencias;
 
   @override
@@ -46,18 +49,16 @@ class _InicioTelaState extends State<InicioTela> {
     return usuario.isEmpty ? 'cliente' : usuario[0].toUpperCase() + usuario.substring(1);
   }
 
-  void _mostrar(String mensagem, {bool erro = false}) {
+  void _mostrar(String mensagem, {Color? cor}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(mensagem),
-        backgroundColor: erro ? Cores.debito : Cores.primaria,
-      ));
+      ..showSnackBar(SnackBar(content: Text(mensagem), backgroundColor: cor ?? Cores.primaria));
   }
 
   String _descreverErro(Object erro) => switch (erro) {
         ApiErro(:final mensagem, :final status) => '$mensagem (HTTP $status)',
-        SemConexao() => erro.toString(),
+        SemConexao() => '${erro.toString()} Ainda não há dados salvos desta conta no aparelho.',
+        OperacaoInvalida(:final mensagem) => mensagem,
         _ => 'Erro inesperado: $erro',
       };
 
@@ -81,9 +82,11 @@ class _InicioTelaState extends State<InicioTela> {
   Future<void> _executar(Future<String> Function() operacao) async {
     setState(() => _ocupado = true);
     try {
-      _mostrar(await operacao());
+      final mensagem = await operacao();
+      final offline = widget.contas.operacoes.isNotEmpty && widget.contas.operacoes.first.status == 'pendente';
+      _mostrar(mensagem, cor: offline ? Cores.alerta : null);
     } catch (erro) {
-      _mostrar(_descreverErro(erro), erro: true);
+      _mostrar(_descreverErro(erro), cor: Cores.debito);
     } finally {
       if (mounted) setState(() => _ocupado = false);
     }
@@ -106,18 +109,87 @@ class _InicioTelaState extends State<InicioTela> {
     if (dados != null) await _executar(() => widget.contas.transferir(dados.$1, dados.$2));
   }
 
+  Widget _banner() {
+    final contas = widget.contas;
+    final online = widget.conectividade.online;
+    final pendentes = contas.pendentes.length;
+    if (online && !contas.sincronizando) return const SizedBox.shrink();
+    final (cor, fundo, icone, texto) = !online
+        ? (
+            Cores.alerta,
+            const Color(0xFFFFF7ED),
+            Icons.airplanemode_active_rounded,
+            'Sem conexão. Mostrando os dados salvos no aparelho; operações ficam na fila'
+                '${pendentes > 0 ? ' ($pendentes pendente${pendentes > 1 ? 's' : ''})' : ''}.',
+          )
+        : (
+            Cores.destaque,
+            const Color(0xFFEFF6FF),
+            Icons.sync_rounded,
+            'Conexão restabelecida. Sincronizando $pendentes ${pendentes == 1 ? 'operação' : 'operações'}...',
+          );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Bloco(
+        cor: fundo,
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(icone, color: cor),
+            const SizedBox(width: 10),
+            Expanded(child: Text(texto, style: TextStyle(color: cor, fontWeight: FontWeight.w600))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Fila offline: pendentes, conflitos e as sincronizadas há pouco.
+  Widget _filaOffline() {
+    final agora = DateTime.now();
+    final itens = widget.contas.operacoes
+        .where((o) =>
+            o.offline &&
+            (o.emAberto || (o.resolvidaEm != null && agora.difference(o.resolvidaEm!).inMinutes < 3)))
+        .toList();
+    if (itens.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const TituloSecao('Sincronização offline'),
+        Bloco(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          child: Column(
+            children: [
+              for (var i = 0; i < itens.length; i++) ...[
+                if (i > 0) const Divider(height: 1, color: Cores.borda),
+                ItemOperacao(
+                  operacao: itens[i],
+                  aoReenviar: () => widget.contas.reenviar(itens[i]),
+                  aoDescartar: () => widget.contas.descartar(itens[i]),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.contas,
+      listenable: Listenable.merge([widget.contas, widget.conectividade]),
       builder: (context, _) {
-        final conta = widget.contas.conta;
-        final operacoes = widget.contas.operacoes;
+        final contas = widget.contas;
+        final conta = contas.conta;
+        final recentes = contas.operacoes.where((o) => !o.emAberto).take(8).toList();
         final podeOperar = conta != null && !_ocupado;
         return RefreshIndicator(
           onRefresh: () async {
             await widget.lideranca.consultar();
             if (conta != null) await _acessarConta(conta.id);
+            await contas.sincronizar();
           },
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -139,15 +211,21 @@ class _InicioTelaState extends State<InicioTela> {
                       ],
                     ),
                   ),
-                  if (_ocupado)
+                  if (_ocupado || contas.sincronizando)
                     const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
                 ],
               ),
               const SizedBox(height: 16),
+              _banner(),
               FaixaLideranca(lideranca: widget.lideranca, aoTocar: widget.aoAbrirAgencias),
               const SizedBox(height: 12),
               if (conta != null)
-                CartaoSaldo(conta: conta, aoTrocarConta: () => _acessarConta())
+                CartaoSaldo(
+                  conta: conta,
+                  saldoProvisorio: contas.saldoProvisorio(conta),
+                  pendentes: contas.pendentesDa(conta.id).length,
+                  aoTrocarConta: () => _acessarConta(),
+                )
               else
                 Bloco(
                   child: Column(
@@ -182,6 +260,7 @@ class _InicioTelaState extends State<InicioTela> {
                     ),
                   ),
                 ),
+              _filaOffline(),
               const TituloSecao('Ações rápidas'),
               GridView(
                 shrinkWrap: true,
@@ -226,7 +305,7 @@ class _InicioTelaState extends State<InicioTela> {
               const TituloSecao('Atividade recente'),
               Bloco(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                child: operacoes.isEmpty
+                child: recentes.isEmpty
                     ? const Padding(
                         padding: EdgeInsets.symmetric(vertical: 18),
                         child: Center(
@@ -236,9 +315,9 @@ class _InicioTelaState extends State<InicioTela> {
                       )
                     : Column(
                         children: [
-                          for (var i = 0; i < operacoes.length && i < 8; i++) ...[
+                          for (var i = 0; i < recentes.length; i++) ...[
                             if (i > 0) const Divider(height: 1, color: Cores.borda),
-                            ItemOperacao(operacao: operacoes[i]),
+                            ItemOperacao(operacao: recentes[i]),
                           ],
                         ],
                       ),

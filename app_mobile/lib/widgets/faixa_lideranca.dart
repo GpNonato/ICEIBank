@@ -49,7 +49,7 @@ class FaixaLideranca extends StatelessWidget {
                     ),
                     Text(
                       semResposta
-                          ? lideranca.erro!
+                          ? '${lideranca.erro!}${lider != null ? ' Última líder conhecida.' : ''}'
                           : 'via Agência ${lideranca.agenciaConsultada}'
                               '${atualizado != null ? ' · ${hora(atualizado)}' : ''}',
                       style: TextStyle(
