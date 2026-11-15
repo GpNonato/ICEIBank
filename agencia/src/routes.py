@@ -1,6 +1,12 @@
 from fastapi import APIRouter, Depends
 
-from .controllers import authController, contasController, extrasController, transferenciasController
+from .controllers import (
+    authController,
+    bullyController,
+    contasController,
+    extrasController,
+    transferenciasController,
+)
 from .services import authService
 
 router = APIRouter()
@@ -60,3 +66,8 @@ router.add_api_route(
     methods=["GET"],
     dependencies=protecao_agencia,
 )
+
+# Eleição de líder (Bully): mensagens trocadas entre as agências.
+router.add_api_route("/bully/eleicao", bullyController.receber_eleicao, methods=["POST"])
+router.add_api_route("/bully/coordenador", bullyController.receber_coordenador, methods=["POST"])
+router.add_api_route("/bully/lider", bullyController.consultar_lider, methods=["GET"])

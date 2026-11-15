@@ -21,3 +21,13 @@ class TransferenciaEntrada(BaseModel):
 class LoginEntrada(BaseModel):
     usuario: str
     senha: str
+
+
+class EleicaoEntrada(BaseModel):
+    origemId: int
+    vetorEnvio: list[int]
+
+
+class CoordenadorEntrada(BaseModel):
+    liderId: int
+    vetorEnvio: list[int]

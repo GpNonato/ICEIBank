@@ -17,6 +17,7 @@ from .controllers.transferenciasController import (
 )
 from .routes import router
 from .services import authService, mensageria
+from .services.bullyService import ServicoBully
 from .services.eventLog import RegistroEventos
 from .services.vectorClock import RelogioVetorial
 
@@ -47,6 +48,7 @@ async def ciclo_de_vida(app: FastAPI):
     )
     print(f"[Agência {id_agencia}] consumindo fila-agencia-{id_agencia}", flush=True)
     yield
+    app.state.bully.parar()
     await mensageria.fechar()
 
 
@@ -64,6 +66,7 @@ app.state.registro = RegistroEventos(f"agencia-{id_agencia}")
 app.state.contas = {}
 app.state.transferencias_processadas = {}
 app.state.creditos_processados = {}
+app.state.bully = ServicoBully(id_agencia, app.state.relogio, app.state.registro)
 
 app.add_middleware(
     CORSMiddleware,
@@ -143,7 +146,17 @@ if PASTA_FRONTEND.is_dir():
     app.mount("/", StaticFiles(directory=PASTA_FRONTEND, html=True), name="frontend")
 
 
+class ServidorAgencia(uvicorn.Server):
+    async def startup(self, sockets=None) -> None:
+        await super().startup(sockets=sockets)
+        if self.should_exit:
+            return
+        # A agência já aceita conexões: dispara a própria eleição para descobrir
+        # (ou estabelecer) quem é a líder.
+        app.state.bully.iniciar()
+
+
 if __name__ == "__main__":
     porta = int(agencia_config["url"].rsplit(":", 1)[1])
     print(f"[Agência {id_agencia}] iniciando na porta {porta}", flush=True)
-    uvicorn.run(app, host="0.0.0.0", port=porta)
+    ServidorAgencia(uvicorn.Config(app, host="0.0.0.0", port=porta)).run()
