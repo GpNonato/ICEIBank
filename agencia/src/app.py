@@ -66,6 +66,7 @@ app.state.registro = RegistroEventos(f"agencia-{id_agencia}")
 app.state.contas = {}
 app.state.transferencias_processadas = {}
 app.state.creditos_processados = {}
+app.state.sincronizacoes_processadas = {}
 app.state.bully = ServicoBully(id_agencia, app.state.relogio, app.state.registro)
 
 app.add_middleware(

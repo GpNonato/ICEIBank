@@ -23,6 +23,14 @@ class LoginEntrada(BaseModel):
     senha: str
 
 
+class SincronizacaoEntrada(BaseModel):
+    tipo: str
+    valor: float
+    vetorConhecido: list[int]
+    idDestino: int | None = None
+    idOperacao: str | None = None
+
+
 class EleicaoEntrada(BaseModel):
     origemId: int
     vetorEnvio: list[int]

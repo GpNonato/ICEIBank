@@ -35,6 +35,10 @@ router.add_api_route(
     methods=["POST"], dependencies=protecao_usuario,
 )
 router.add_api_route(
+    "/contas/{id_conta}/sincronizar", contasController.sincronizar_operacao_pendente,
+    methods=["POST"], dependencies=protecao_usuario,
+)
+router.add_api_route(
     "/transferencias", transferenciasController.transferir,
     methods=["POST"], dependencies=protecao_usuario,
 )

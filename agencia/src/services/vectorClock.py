@@ -24,6 +24,7 @@ class RelogioVetorial:
             self.vetor[self.id_agencia] += 1
             return list(self.vetor)
 
-    def valor_atual(self) -> list[int]:
+    def obter_vetor_atual(self) -> list[int]:
+        # Lê o vetor sem incrementá-lo (não é um evento).
         with self._lock:
             return list(self.vetor)
