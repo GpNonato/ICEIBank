@@ -3,10 +3,11 @@ from threading import Lock
 
 import httpx
 
-from ..config import AGENCIAS
+from ..config import AGENCIAS, obter_agencia
 
 
 TIMEOUT_SEGUNDOS = 1.0
+INTERVALO_HEARTBEAT_SEGUNDOS = 3.0
 
 
 class ServicoBully:
@@ -110,6 +111,42 @@ class ServicoBully:
     def obter_lider_atual(self) -> int | None:
         with self._lock:
             return self._lider_atual
+
+    async def verificar_lider(self) -> None:
+        lider = self.obter_lider_atual()
+        if lider is None:
+            await self.iniciar_eleicao()
+            return
+        if lider == self.id_agencia:
+            return  # eu sou a líder, nada a verificar
+
+        lider_info = obter_agencia(lider)
+        try:
+            if lider_info is None:
+                raise httpx.ConnectError(f"agência {lider} não configurada")
+            async with self._cliente() as cliente:
+                resposta = await cliente.get(f"{lider_info['url']}/bully/lider")
+                resposta.raise_for_status()
+        except httpx.HTTPError:
+            vetor = self.relogio.evento_local()
+            self.registro.registrar(
+                "LIDER_NAO_RESPONDEU", vetor, {"liderAtual": lider, "agencia": self.id_agencia},
+            )
+            with self._lock:
+                if self._lider_atual == lider:
+                    self._lider_atual = None
+            await self.iniciar_eleicao()
+
+    async def _heartbeat(self, intervalo: float) -> None:
+        while True:
+            await asyncio.sleep(intervalo)
+            try:
+                await self.verificar_lider()
+            except Exception as erro:  # noqa: BLE001 - o heartbeat não pode parar
+                print(f"[Bully] falha no heartbeat: {erro!r}", flush=True)
+
+    def iniciar_heartbeat(self, intervalo: float = INTERVALO_HEARTBEAT_SEGUNDOS) -> None:
+        self._em_segundo_plano(self._heartbeat(intervalo))
 
     def iniciar(self) -> None:
         """Dispara a eleição inicial, depois que a agência já aceita conexões."""

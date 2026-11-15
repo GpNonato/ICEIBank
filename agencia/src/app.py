@@ -154,6 +154,8 @@ class ServidorAgencia(uvicorn.Server):
         # A agência já aceita conexões: dispara a própria eleição para descobrir
         # (ou estabelecer) quem é a líder.
         app.state.bully.iniciar()
+        # A cada 3 segundos verifica se a líder continua respondendo.
+        app.state.bully.iniciar_heartbeat()
 
 
 if __name__ == "__main__":
