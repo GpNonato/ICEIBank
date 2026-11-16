@@ -5,19 +5,20 @@ from threading import Lock
 
 import httpx
 
-from ..config import AGENCIAS, obter_agencia
+from ..config import AGENCIAS, BULLY_HEARTBEAT_MS, BULLY_TIMEOUT_MS, obter_agencia
 
 
-TIMEOUT_SEGUNDOS = 1.0
-INTERVALO_HEARTBEAT_SEGUNDOS = 3.0
+# Configuráveis por variável de ambiente (padrões: 1 s de timeout e heartbeat a cada 3 s).
+TIMEOUT_SEGUNDOS = BULLY_TIMEOUT_MS / 1000
+INTERVALO_HEARTBEAT_SEGUNDOS = BULLY_HEARTBEAT_MS / 1000
 
 
 class ServicoBully:
     """Eleição de líder entre as agências pelo algoritmo de Bully.
 
     Vence sempre a agência de maior ID entre as que estão ativas. As chamadas
-    entre agências usam httpx com timeout de 1 segundo; uma agência fora do ar
-    ou que não responde a tempo é tratada como inativa.
+    entre agências usam httpx com timeout (BULLY_TIMEOUT_MS, padrão 1 segundo);
+    uma agência fora do ar ou que não responde a tempo é tratada como inativa.
     """
 
     def __init__(self, id_agencia: int, relogio, registro) -> None:

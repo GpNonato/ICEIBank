@@ -76,6 +76,12 @@ class ListaAgencias extends StatelessWidget {
   }
 }
 
+String _segundos(int ms) {
+  final s = ms / 1000;
+  final texto = s == s.roundToDouble() ? s.toStringAsFixed(0) : s.toStringAsFixed(1).replaceAll('.', ',');
+  return '$texto s';
+}
+
 class _LinhaAgencia extends StatelessWidget {
   const _LinhaAgencia({required this.id, required this.estado, required this.ehLider});
 
@@ -110,6 +116,11 @@ class _LinhaAgencia extends StatelessWidget {
                 ),
                 Text('porta ${Configuracao.portaBase + id} · $detalhe',
                     style: const TextStyle(fontSize: 12, color: Cores.textoSecundario)),
+                if (online && estado!.heartbeatMs != null)
+                  Text(
+                    'heartbeat a cada ${_segundos(estado!.heartbeatMs!)} · timeout ${_segundos(estado!.timeoutMs ?? 0)}',
+                    style: const TextStyle(fontSize: 12, color: Cores.destaque),
+                  ),
               ],
             ),
           ),

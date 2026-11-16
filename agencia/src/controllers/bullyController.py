@@ -1,5 +1,7 @@
 from fastapi import Request
 
+from ..config import BULLY_HEARTBEAT_MS, BULLY_TIMEOUT_MS
+
 from ..models import CoordenadorEntrada, EleicaoEntrada
 
 
@@ -15,7 +17,12 @@ async def receber_coordenador(dados: CoordenadorEntrada, request: Request):
 
 async def consultar_lider(request: Request):
     estado = request.app.state
-    return {"idAgencia": estado.id_agencia, "liderAtual": estado.bully.obter_lider_atual()}
+    return {
+        "idAgencia": estado.id_agencia,
+        "liderAtual": estado.bully.obter_lider_atual(),
+        "heartbeatMs": BULLY_HEARTBEAT_MS,
+        "timeoutMs": BULLY_TIMEOUT_MS,
+    }
 
 
 async def consultar_historico(request: Request):

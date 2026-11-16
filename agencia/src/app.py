@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import AGENCIAS, NUMERO_AGENCIAS, obter_agencia
+from .config import AGENCIAS, BULLY_HEARTBEAT_MS, BULLY_TIMEOUT_MS, NUMERO_AGENCIAS, obter_agencia
 from .controllers.transferenciasController import (
     descartar_mensagem,
     processar_confirmacao,
@@ -155,8 +155,12 @@ class ServidorAgencia(uvicorn.Server):
         # A agência já aceita conexões: dispara a própria eleição para descobrir
         # (ou estabelecer) quem é a líder.
         app.state.bully.iniciar()
-        # A cada 3 segundos verifica se a líder continua respondendo.
+        # Verifica periodicamente se a líder continua respondendo.
         app.state.bully.iniciar_heartbeat()
+        print(
+            f"[Bully] heartbeat a cada {BULLY_HEARTBEAT_MS} ms, timeout de {BULLY_TIMEOUT_MS} ms",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":

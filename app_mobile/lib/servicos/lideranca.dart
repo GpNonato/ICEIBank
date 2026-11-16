@@ -32,7 +32,15 @@ class RegistroLider {
 
 /// Resultado da última consulta a uma agência.
 class EstadoAgencia {
-  EstadoAgencia({required this.id, required this.online, this.lider, this.latenciaMs, required this.verificadaEm});
+  EstadoAgencia({
+    required this.id,
+    required this.online,
+    this.lider,
+    this.latenciaMs,
+    this.heartbeatMs,
+    this.timeoutMs,
+    required this.verificadaEm,
+  });
 
   final int id;
   final bool online;
@@ -40,6 +48,10 @@ class EstadoAgencia {
   /// Quem esta agência considera a líder.
   final int? lider;
   final int? latenciaMs;
+
+  /// Configuração do Bully informada pela agência (variáveis de ambiente).
+  final int? heartbeatMs;
+  final int? timeoutMs;
   final DateTime verificadaEm;
 }
 
@@ -134,6 +146,8 @@ class LiderancaServico extends ChangeNotifier with WidgetsBindingObserver {
         online: true,
         lider: (dados['liderAtual'] as num?)?.toInt(),
         latenciaMs: DateTime.now().difference(inicio).inMilliseconds,
+        heartbeatMs: (dados['heartbeatMs'] as num?)?.toInt(),
+        timeoutMs: (dados['timeoutMs'] as num?)?.toInt(),
         verificadaEm: DateTime.now(),
       );
     } on SemConexao {
