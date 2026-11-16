@@ -32,7 +32,7 @@ async def consultar_status(request: Request):
         "agencia": estado.id_agencia,
         "url": AGENCIAS[estado.id_agencia]["url"],
         "status": "disponível",
-        "relogioVetorial": estado.relogio.valor_atual(),
+        "relogioVetorial": estado.relogio.obter_vetor_atual(),
         "quantidadeContas": len(estado.contas),
     }
 

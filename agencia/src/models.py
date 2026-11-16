@@ -21,3 +21,21 @@ class TransferenciaEntrada(BaseModel):
 class LoginEntrada(BaseModel):
     usuario: str
     senha: str
+
+
+class SincronizacaoEntrada(BaseModel):
+    tipo: str
+    valor: float
+    vetorConhecido: list[int]
+    idDestino: int | None = None
+    idOperacao: str | None = None
+
+
+class EleicaoEntrada(BaseModel):
+    origemId: int
+    vetorEnvio: list[int]
+
+
+class CoordenadorEntrada(BaseModel):
+    liderId: int
+    vetorEnvio: list[int]

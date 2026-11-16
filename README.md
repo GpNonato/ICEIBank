@@ -2,7 +2,9 @@
 
 API REST distribuída desenvolvida em Python com FastAPI. A partir do Sprint 2, as
 transferências entre agências são entregues por mensageria (RabbitMQ, padrão
-Publish/Subscribe) e os eventos são ordenados com relógio vetorial.
+Publish/Subscribe) e os eventos são ordenados com relógio vetorial. No Sprint 3, as
+agências passam a eleger uma líder (algoritmo de Bully) e o projeto ganha um app
+Flutter offline-first (`app_mobile/`).
 
 ## Instalar as dependências
 
@@ -70,6 +72,48 @@ O script lista os eventos por hora de parede, compara os vetores de todos os par
 agências diferentes e mostra, para cada transferência entre agências, a relação causal
 entre a publicação e o recebimento.
 
+## Eleição de líder (Bully)
+
+Ao subir, cada agência dispara uma eleição: envia `POST /bully/eleicao` para as agências
+de ID maior e, se nenhuma responder, vira líder e anuncia o resultado com
+`POST /bully/coordenador`. Vence sempre a agência ativa de maior ID. Um heartbeat consulta
+a líder a cada 3 segundos (`GET /bully/lider`); se ela não responder dentro de 1 segundo,
+a agência registra `LIDER_NAO_RESPONDEU` e inicia uma nova eleição.
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:4042/bully/lider" -Method Get
+```
+
+Para reconstruir a linha do tempo de lideranças a partir dos logs das 3 agências:
+
+```powershell
+.\.venv\Scripts\python.exe historico-lideranca.py
+```
+
+O intervalo do heartbeat e o timeout podem ser alterados pelas variáveis
+`BULLY_HEARTBEAT_MS` (padrão 3000) e `BULLY_TIMEOUT_MS` (padrão 1000).
+
+## Sincronização offline-first
+
+`GET /contas/{id}` devolve também o `vetorAtual` da agência. O app guarda esse vetor e,
+quando registra uma operação sem conexão, envia depois:
+
+```text
+POST /contas/{id}/sincronizar
+{"tipo": "DEPOSITO" | "SAQUE" | "TRANSFERENCIA", "valor": 30, "vetorConhecido": [3, 0, 1],
+ "idDestino": 4, "idOperacao": "app-..."}
+```
+
+Se o vetor conhecido for igual ao vetor atual da agência, a operação é aplicada e a
+resposta traz o novo `vetorAtual`. Se a agência avançou desde a leitura do app, ela
+responde HTTP 409 com o estado atual da conta e não aplica a operação. O `idOperacao`
+evita aplicar duas vezes uma operação reenviada.
+
+## App mobile
+
+O app Flutter fica em `app_mobile/` e usa a mesma API das agências. As instruções de
+execução, inclusive no emulador Android, estão em `app_mobile/README.md`.
+
 ## Terminal web
 
 Com as agências no ar, abra `http://localhost:4042` no navegador. A pasta `frontend/`
@@ -101,6 +145,18 @@ histórico e mostra o endpoint chamado à direita de cada comando. O token fica 
 
 Como o comando `agencia` chama as outras portas, cada agência libera via CORS as
 origens das demais (`localhost` e `127.0.0.1` nas portas 4042-4044).
+
+## Funcionalidades adicionais do Sprint 3
+
+- **Agências ativas no app:** o app consulta as 3 agências a cada 3 segundos e mostra quais
+  estão respondendo, quem cada uma considera líder e o tempo de resposta. Avisa quando
+  as agências ainda divergem sobre a líder.
+- **Histórico de líderes:** `GET /bully/historico` lista as definições de líder vistas por
+  uma agência (eleita, anunciada ou queda da líder), exibidas na aba Agências do app.
+- **Eleição sob demanda:** `POST /bully/eleicao/forcar` (com token de usuário) dispara uma
+  nova eleição na agência; no app, botão "Forçar nova eleição".
+- **Timeout configurável:** `BULLY_HEARTBEAT_MS` e `BULLY_TIMEOUT_MS`, exibidos em
+  `GET /bully/lider` e na aba Agências do app.
 
 ## Funcionalidades adicionais do Sprint 2
 

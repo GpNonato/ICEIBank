@@ -13,6 +13,9 @@ LIMITE_SAQUE = float(os.getenv("LIMITE_SAQUE", "1000"))
 LIMITE_TRANSFERENCIA = float(os.getenv("LIMITE_TRANSFERENCIA", "1000"))
 LIMITE_SALDO_BAIXO = float(os.getenv("LIMITE_SALDO_BAIXO", "50"))
 RABBITMQ_URL = os.getenv("RABBITMQ_URL")
+# Eleição de líder (Bully): intervalo do heartbeat e timeout das chamadas entre agências.
+BULLY_HEARTBEAT_MS = int(os.getenv("BULLY_HEARTBEAT_MS", "3000"))
+BULLY_TIMEOUT_MS = int(os.getenv("BULLY_TIMEOUT_MS", "1000"))
 
 AGENCIAS = [
     {"id": 0, "url": f"http://localhost:{PORTA_BASE}"},

@@ -184,3 +184,120 @@ Depois de processar o crédito, a agência de destino envia uma confirmação pa
 ## Declaração de uso de IA
 
 Foi utilizada IA para apoiar a implementação do Sprint 2, a captura das evidências e a revisão das respostas.
+
+
+# Respostas — Sprint 3: ICEIBank
+
+## Parte A — Mensagens de eleição e coordenador
+
+### Decisões de implementação
+
+O algoritmo foi adaptado para Python com httpx e tarefas do asyncio, com timeout de 1 segundo nas chamadas entre agências. A eleição começa logo depois que a agência passa a aceitar conexões.
+
+### 1. Por que o Bully elege o maior ID?
+
+É só uma regra combinada, que garante um único vencedor. Se fosse invertida, a Agência 0 seria a líder, e o resultado continuaria correto, desde que todas usassem a mesma regra.
+
+### 2. Mais de uma agência declarou TORNOU_LIDER. É um bug?
+
+Não. As agências subiram em momentos diferentes: a 0 virou líder sozinha, depois a 1 e por fim a 2, que anunciou o resultado para as outras. Cada uma decidiu com o que via no momento, e todas convergiram para a Agência 2.
+
+### 3. A falta de autenticação em /bully/eleicao é um problema?
+
+Sim. Qualquer um poderia disparar eleições em sequência ou, pela rota de coordenador, anunciar uma líder falsa. Como no Sprint 4 a líder vai coordenar transações, essas rotas deveriam exigir o token de agência.
+
+## Parte B — Heartbeat e failover automático
+
+### 1. Heartbeat de 100 ms ou de 60 segundos
+
+Com 100 ms a queda é percebida rápido, mas a rede fica cheia de consultas e qualquer lentidão vira uma eleição. Com 60 segundos, o sistema pode ficar até um minuto sem líder. No teste, com 3 segundos, a nova líder foi eleita em cerca de 5 segundos.
+
+### 2. A agência que volta retoma a liderança. Isso é desejável?
+
+Nem sempre, pois provoca uma nova troca mesmo com a líder atual funcionando. Se isso acontecer no meio de uma transação coordenada pela líder, os participantes podem ficar sem saber se confirmam ou desfazem.
+
+### 3. E se a rede estiver lenta e passar de 1 segundo?
+
+Uma agência viva seria tratada como fora do ar. Isso causaria eleições desnecessárias e até duas agências se declarando líderes ao mesmo tempo.
+
+## Parte C — Observando a eleição
+
+### 1. Quantas vezes a liderança mudou na subida?
+
+Duas vezes: da Agência 0 para a 1 e da 1 para a 2, em cerca de 4 segundos. O resultado final não muda, mas há custo de mensagens extras, esperas de timeout e um período em que as agências não concordam sobre a líder.
+
+## Parte D — App Flutter
+
+### Decisões de implementação
+
+O app usa o pacote http, guarda o token JWT no aparelho e envia cada operação para a agência número da conta % 3. A líder aparece no topo da tela inicial e é consultada a cada 3 segundos.
+
+### 1. Com que frequência o app consulta /bully/lider?
+
+A cada 3 segundos, o mesmo intervalo do heartbeat. Consultar mais rápido não ajudaria muito, porque a eleição leva alguns segundos, e gastaria mais bateria e dados.
+
+### 2. E se duas agências responderem líderes diferentes?
+
+O app mostra o que a agência consultada respondeu, e a diferença some na consulta seguinte. Como a líder ainda é só informativa, isso não é um problema real.
+
+### 3. O que foi reaproveitado do frontend web?
+
+Foram reaproveitados os endpoints, o envio do token, a saída no 401 e as mensagens de erro da API. No mobile, foi preciso tratar a perda de conexão, guardar os dados no aparelho e pausar as consultas em segundo plano.
+
+## Parte E — Sincronização offline-first no backend
+
+### Decisões de implementação
+
+A consulta de saldo passou a devolver o vetorAtual, e a sincronização aceita depósito, saque e transferência. No teste, a sincronização com o vetor [9, 5, 3] recebeu 409 e foi aplicada ao usar o vetor [10, 5, 3] devolvido no conflito.
+
+### 1. Por que comparar o vetor, e não só o saldo?
+
+O vetor mostra que algo aconteceu na agência mesmo que o saldo volte ao mesmo valor, como um depósito seguido de um saque igual. Comparar só o saldo aceitaria uma operação feita com informação antiga.
+
+### 2. Por que qualquer mudança no vetor vira conflito?
+
+Porque o vetor é da agência inteira e muda com operações de qualquer conta. Para detectar por conta, cada conta precisaria ter sua própria versão.
+
+### 3. O que o app deve fazer com o 409?
+
+Mostrar o saldo real e perguntar à pessoa, já que se trata de dinheiro. O app só reenvia sozinho quando o saldo real é igual ao esperado, pois nesse caso a conta não mudou.
+
+## Parte F — App Flutter offline-first
+
+### Decisões de implementação
+
+O app guarda as contas e as operações no SQLite. Sem conexão, a operação vai para uma fila e é enviada sozinha quando a rede volta.
+
+### 1. Qual biblioteca de armazenamento local foi escolhida?
+
+Foi escolhido o sqflite, porque as contas e a fila de operações se encaixam bem em tabelas. O Hive e o Drift também foram considerados, mas o Hive só guarda chave e valor e o Drift exige geração de código.
+
+### 2. O que aconteceu na tela quando a sincronização foi recusada?
+
+O app mostrou um aviso com o saldo esperado e o saldo real, com as opções Depois, Descartar e Reenviar. A operação ficou marcada como Conflito, para a pessoa decidir o que fazer.
+
+### 3. Que risco a UI otimista traz para um app bancário?
+
+A pessoa pode tomar decisões com um saldo que ainda não foi confirmado. Por isso o saldo provisório aparece em destaque, junto com o saldo confirmado, e as operações pendentes ficam marcadas.
+
+## Funcionalidade adicional escolhida — Seção 2.1
+
+A funcionalidade escolhida foi o indicador de agências ativas no app. Ela foi escolhida porque o painel só mostrava a líder, sem indicar quais agências estavam fora do ar. O app passou a consultar as três agências e mostra quais estão ativas e quem cada uma considera líder. No teste, ao derrubar a Agência 2, o app mostrou "Agências ativas (2 de 3)".
+
+Além da funcionalidade escolhida, foram implementados outros recursos complementares.
+
+### Histórico de líderes
+
+O endpoint GET /bully/historico lista as últimas trocas de líder vistas pela agência, e o app mostra esse histórico na aba Agências.
+
+### Eleição sob demanda
+
+O endpoint POST /bully/eleicao/forcar dispara uma nova eleição. No app, isso é feito pelo botão Forçar nova eleição.
+
+### Timeout configurável
+
+O intervalo do heartbeat e o timeout podem ser alterados pelas variáveis BULLY_HEARTBEAT_MS e BULLY_TIMEOUT_MS.
+
+## Declaração de uso de IA
+
+Foi utilizada IA para apoiar a implementação do Sprint 3, a captura das evidências e a revisão das respostas.
