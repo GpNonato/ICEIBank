@@ -21,3 +21,17 @@ async def consultar_lider(request: Request):
 async def consultar_historico(request: Request):
     estado = request.app.state
     return {"idAgencia": estado.id_agencia, "historico": estado.bully.historico()}
+
+
+async def forcar_eleicao(request: Request):
+    estado = request.app.state
+    iniciada = estado.bully.forcar_eleicao()
+    return {
+        "idAgencia": estado.id_agencia,
+        "iniciada": iniciada,
+        "mensagem": (
+            f"Eleição iniciada na Agência {estado.id_agencia}."
+            if iniciada else "Já existe uma eleição em andamento nesta agência."
+        ),
+        "liderAtual": estado.bully.obter_lider_atual(),
+    }

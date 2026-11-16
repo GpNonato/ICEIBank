@@ -143,6 +143,15 @@ class LiderancaServico extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Eleição sob demanda na agência consultada (POST /bully/eleicao/forcar).
+  Future<String> forcarEleicao() async {
+    final agencia = agenciaConsultada ?? _preferida;
+    final dados = await api.post(agencia, '/bully/eleicao/forcar', const {});
+    // dá tempo para as mensagens de eleição e de coordenador circularem
+    Future.delayed(const Duration(milliseconds: 2500), consultar);
+    return dados['mensagem'] as String? ?? 'Eleição iniciada na Agência $agencia.';
+  }
+
   Future<void> _buscarHistorico(int agencia) async {
     try {
       final dados = await api.get(agencia, '/bully/historico', timeout: Configuracao.timeoutLideranca);

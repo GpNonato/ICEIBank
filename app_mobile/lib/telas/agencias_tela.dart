@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../config.dart';
+import '../servicos/api.dart';
 import '../servicos/lideranca.dart';
 import '../tema.dart';
 import '../util/formatos.dart';
@@ -11,6 +12,19 @@ class AgenciasTela extends StatelessWidget {
   const AgenciasTela({super.key, required this.lideranca});
 
   final LiderancaServico lideranca;
+
+  Future<void> _forcarEleicao(BuildContext context) async {
+    final mensageiro = ScaffoldMessenger.of(context);
+    try {
+      final mensagem = await lideranca.forcarEleicao();
+      mensageiro.showSnackBar(SnackBar(content: Text(mensagem), backgroundColor: Cores.primaria));
+    } on ApiErro catch (erro) {
+      mensageiro.showSnackBar(
+          SnackBar(content: Text('${erro.mensagem} (HTTP ${erro.status})'), backgroundColor: Cores.debito));
+    } on SemConexao catch (erro) {
+      mensageiro.showSnackBar(SnackBar(content: Text(erro.toString()), backgroundColor: Cores.debito));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +81,19 @@ class AgenciasTela extends StatelessWidget {
                       style: const TextStyle(fontSize: 12, color: Cores.textoSecundario),
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: lideranca.erro != null ? null : () => _forcarEleicao(context),
+                icon: const Icon(Icons.how_to_vote_rounded),
+                label: const Text('Forçar nova eleição'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Cores.texto,
+                  minimumSize: const Size.fromHeight(48),
+                  side: const BorderSide(color: Cores.borda),
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
               ),
               TituloSecao('Agências ativas (${lideranca.ativas} de ${Configuracao.numeroAgencias})'),

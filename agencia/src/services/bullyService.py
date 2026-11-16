@@ -168,6 +168,17 @@ class ServicoBully:
     def iniciar_heartbeat(self, intervalo: float = INTERVALO_HEARTBEAT_SEGUNDOS) -> None:
         self._em_segundo_plano(self._heartbeat(intervalo))
 
+    def forcar_eleicao(self) -> bool:
+        """Eleição sob demanda (ex.: botão no app). Retorna False se já há uma em andamento."""
+        with self._lock:
+            em_andamento = self._eleicao_em_andamento
+        if em_andamento:
+            return False
+        vetor = self.relogio.evento_local()
+        self.registro.registrar("ELEICAO_SOB_DEMANDA", vetor, {"idAgencia": self.id_agencia})
+        self._em_segundo_plano(self.iniciar_eleicao())
+        return True
+
     def iniciar(self) -> None:
         """Dispara a eleição inicial, depois que a agência já aceita conexões."""
         self._em_segundo_plano(self.iniciar_eleicao())
