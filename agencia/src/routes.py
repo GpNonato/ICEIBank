@@ -75,3 +75,4 @@ router.add_api_route(
 router.add_api_route("/bully/eleicao", bullyController.receber_eleicao, methods=["POST"])
 router.add_api_route("/bully/coordenador", bullyController.receber_coordenador, methods=["POST"])
 router.add_api_route("/bully/lider", bullyController.consultar_lider, methods=["GET"])
+router.add_api_route("/bully/historico", bullyController.consultar_historico, methods=["GET"])

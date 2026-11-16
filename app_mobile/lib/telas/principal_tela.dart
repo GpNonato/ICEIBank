@@ -137,7 +137,10 @@ class _PrincipalTelaState extends State<PrincipalTela> {
         lideranca: widget.lideranca,
         contas: widget.contas,
         conectividade: widget.conectividade,
-        aoAbrirAgencias: () => setState(() => _aba = 1),
+        aoAbrirAgencias: () {
+          setState(() => _aba = 1);
+          widget.lideranca.detalhado = true;
+        },
       ),
       AgenciasTela(lideranca: widget.lideranca),
       PerfilTela(sessao: widget.sessao, config: widget.config, aoSair: _sair),
@@ -146,7 +149,10 @@ class _PrincipalTelaState extends State<PrincipalTela> {
       body: SafeArea(child: IndexedStack(index: _aba, children: abas)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _aba,
-        onDestinationSelected: (aba) => setState(() => _aba = aba),
+        onDestinationSelected: (aba) {
+          setState(() => _aba = aba);
+          widget.lideranca.detalhado = aba == 1;
+        },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Início'),
           NavigationDestination(icon: Icon(Icons.hub_outlined), selectedIcon: Icon(Icons.hub), label: 'Agências'),

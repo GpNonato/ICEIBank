@@ -13,6 +13,23 @@ class TrocaDeLider {
   final DateTime em;
 }
 
+/// Definição de líder registrada por uma agência (GET /bully/historico).
+class RegistroLider {
+  RegistroLider({required this.lider, required this.em, required this.motivo, required this.mudou});
+
+  factory RegistroLider.daApi(Map<String, dynamic> dados) => RegistroLider(
+        lider: (dados['liderAtual'] as num?)?.toInt(),
+        em: DateTime.parse(dados['horaParede'] as String).toLocal(),
+        motivo: dados['motivo'] as String? ?? '',
+        mudou: dados['mudou'] as bool? ?? false,
+      );
+
+  final int? lider;
+  final DateTime em;
+  final String motivo;
+  final bool mudou;
+}
+
 /// Resultado da última consulta a uma agência.
 class EstadoAgencia {
   EstadoAgencia({required this.id, required this.online, this.lider, this.latenciaMs, required this.verificadaEm});
@@ -49,6 +66,17 @@ class LiderancaServico extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Trocas de liderança percebidas pelo app desde que a tela foi aberta.
   final List<TrocaDeLider> trocas = [];
+
+  /// Histórico de líderes da agência consultada (só é buscado com a aba Agências aberta).
+  List<RegistroLider> historico = [];
+  int? historicoDe;
+  bool _detalhado = false;
+
+  set detalhado(bool valor) {
+    if (valor == _detalhado) return;
+    _detalhado = valor;
+    if (valor) consultar();
+  }
 
   /// Última troca de uma líder conhecida para outra (ignora a primeira descoberta).
   TrocaDeLider? get ultimaTroca {
@@ -115,6 +143,20 @@ class LiderancaServico extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _buscarHistorico(int agencia) async {
+    try {
+      final dados = await api.get(agencia, '/bully/historico', timeout: Configuracao.timeoutLideranca);
+      historico = [
+        for (final item in dados['historico'] as List) RegistroLider.daApi(item as Map<String, dynamic>),
+      ];
+      historicoDe = agencia;
+    } on SemConexao {
+      // mantém o último histórico conhecido
+    } on ApiErro {
+      // idem
+    }
+  }
+
   Future<void> consultar() async {
     if (consultando) return;
     consultando = true;
@@ -141,6 +183,7 @@ class LiderancaServico extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     final novoLider = agencias[respondeu]!.lider;
+    if (_detalhado) await _buscarHistorico(respondeu);
     _preferida = respondeu;
     agenciaConsultada = respondeu;
     erro = null;

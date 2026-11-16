@@ -16,3 +16,8 @@ async def receber_coordenador(dados: CoordenadorEntrada, request: Request):
 async def consultar_lider(request: Request):
     estado = request.app.state
     return {"idAgencia": estado.id_agencia, "liderAtual": estado.bully.obter_lider_atual()}
+
+
+async def consultar_historico(request: Request):
+    estado = request.app.state
+    return {"idAgencia": estado.id_agencia, "historico": estado.bully.historico()}

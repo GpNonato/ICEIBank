@@ -19,7 +19,6 @@ class AgenciasTela extends StatelessWidget {
       builder: (context, _) {
         final lider = lideranca.lider;
         final semResposta = lideranca.erro != null;
-        final trocas = lideranca.trocas.where((t) => t.de != null && t.para != null).toList().reversed;
         return RefreshIndicator(
           onRefresh: lideranca.consultar,
           child: ListView(
@@ -92,26 +91,27 @@ class AgenciasTela extends StatelessWidget {
                     ),
                   ),
                 ),
-              const TituloSecao('Trocas percebidas pelo app'),
+              TituloSecao(
+                lideranca.historicoDe == null
+                    ? 'Histórico de líderes'
+                    : 'Histórico de líderes (Agência ${lideranca.historicoDe})',
+              ),
               Bloco(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                child: trocas.isEmpty
+                child: lideranca.historico.isEmpty
                     ? const Padding(
                         padding: EdgeInsets.symmetric(vertical: 18),
                         child: Center(
-                          child: Text('Nenhuma troca de liderança desde que o app abriu.',
+                          child: Text('Nenhuma definição de líder registrada ainda.',
                               style: TextStyle(color: Cores.textoSecundario)),
                         ),
                       )
                     : Column(
                         children: [
-                          for (final troca in trocas)
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: const IconeRedondo(Icons.sync_alt_rounded, cor: Cores.alerta),
-                              title: Text('Agência ${troca.de} → Agência ${troca.para}'),
-                              subtitle: Text('às ${hora(troca.em)}'),
-                            ),
+                          for (var i = 0; i < lideranca.historico.length && i < 8; i++) ...[
+                            if (i > 0) const Divider(height: 1, color: Cores.borda),
+                            _ItemHistorico(registro: lideranca.historico[i]),
+                          ],
                         ],
                       ),
               ),
@@ -119,6 +119,48 @@ class AgenciasTela extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ItemHistorico extends StatelessWidget {
+  const _ItemHistorico({required this.registro});
+
+  final RegistroLider registro;
+
+  @override
+  Widget build(BuildContext context) {
+    final semLider = registro.lider == null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        children: [
+          IconeRedondo(
+            semLider ? Icons.cloud_off_rounded : Icons.workspace_premium_rounded,
+            cor: semLider ? Cores.debito : Cores.lider,
+            tamanho: 38,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  semLider ? 'Sem líder' : 'Agência ${registro.lider}',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Cores.texto),
+                ),
+                Text('${registro.motivo} · ${hora(registro.em)}',
+                    style: const TextStyle(fontSize: 12, color: Cores.textoSecundario)),
+              ],
+            ),
+          ),
+          if (!registro.mudou && !semLider)
+            const Text('reeleita', style: TextStyle(fontSize: 12, color: Cores.textoSecundario)),
+          if (registro.mudou && !semLider)
+            const Text('nova líder',
+                style: TextStyle(fontSize: 12, color: Cores.alerta, fontWeight: FontWeight.w700)),
+        ],
+      ),
     );
   }
 }

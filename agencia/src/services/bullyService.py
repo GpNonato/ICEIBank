@@ -1,4 +1,6 @@
 import asyncio
+from collections import deque
+from datetime import datetime, timezone
 from threading import Lock
 
 import httpx
@@ -26,6 +28,21 @@ class ServicoBully:
         self._eleicao_em_andamento = False
         self._lock = Lock()
         self._tarefas: set[asyncio.Task] = set()
+        self._historico: deque[dict] = deque(maxlen=20)
+
+    def _registrar_historico(self, lider: int | None, motivo: str) -> None:
+        # Guarda as definições de líder vistas por esta agência (para o app exibir).
+        anterior = self._historico[-1]["liderAtual"] if self._historico else None
+        self._historico.append({
+            "liderAtual": lider,
+            "horaParede": datetime.now(timezone.utc).isoformat(),
+            "motivo": motivo,
+            "mudou": lider != anterior,
+        })
+
+    def historico(self) -> list[dict]:
+        with self._lock:
+            return list(reversed(self._historico))
 
     def _agencias_com_id_maior(self) -> list[dict]:
         return [agencia for agencia in AGENCIAS if agencia["id"] > self.id_agencia]
@@ -74,6 +91,7 @@ class ServicoBully:
     async def _tornar_me_lider(self) -> None:
         with self._lock:
             self._lider_atual = self.id_agencia
+            self._registrar_historico(self.id_agencia, "venceu a eleição nesta agência")
         vetor = self.relogio.evento_local()
         self.registro.registrar("TORNOU_LIDER", vetor, {"idAgencia": self.id_agencia})
 
@@ -103,6 +121,7 @@ class ServicoBully:
     def receber_coordenador(self, lider_id: int, vetor_recebido: list[int]) -> None:
         with self._lock:
             self._lider_atual = lider_id
+            self._registrar_historico(lider_id, f"anunciada pela Agência {lider_id}")
         vetor = self.relogio.ao_receber(vetor_recebido)
         self.registro.registrar(
             "LIDER_ANUNCIADO", vetor, {"liderId": lider_id, "agencia": self.id_agencia},
@@ -135,6 +154,7 @@ class ServicoBully:
             with self._lock:
                 if self._lider_atual == lider:
                     self._lider_atual = None
+                    self._registrar_historico(None, f"a Agência {lider} parou de responder")
             await self.iniciar_eleicao()
 
     async def _heartbeat(self, intervalo: float) -> None:
